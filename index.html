@@ -581,7 +581,6 @@ const CodeBlock = ({
 }) => {
   const [showChips, setShowChips] = useState(false);
   const [showMore, setShowMore] = useState(false);
-  // 全部混合，照使用次數排序
   const allChips = [...chips].sort((a, b) => b.freq - a.freq);
   const addChip = phrase => {
     const cur = (value || "").trim();
@@ -763,8 +762,7 @@ const CodeBlock = ({
       fontSize: 17,
       color: C.textSub
     }
-  }, "尚無常用資料，可直接打字或語音輸入    c: c
-  })))))));
+  }, "尚無常用資料，可直接打字或語音輸入"))));
 };
 function App() {
   // 登入狀態
