@@ -794,10 +794,14 @@ function App() {
   const [submitted, setSubmitted] = useState([]);
   const [savedData, setSavedData] = useState({}); // idx -> {codeValues, skin, extraCodes}
   const [showChangePw, setShowChangePw] = useState(false);
+  const [uploadMsg, setUploadMsg] = useState("");
+  const [uploading, setUploading] = useState(false);
   const [oldPw, setOldPw] = useState("");
   const [newPw, setNewPw] = useState("");
   const [newPw2, setNewPw2] = useState("");
   const [pwMsg, setPwMsg] = useState("");
+  const [uploadMsg, setUploadMsg] = useState("");
+  const [uploading, setUploading] = useState(false);
 
   const _wd = ["日", "一", "二", "三", "四", "五", "六"][_now.getDay()];
   const today = `${_now.getFullYear() - 1911}年${_now.getMonth() + 1}月${_now.getDate()}日（${_wd}）`;
@@ -1221,7 +1225,52 @@ function App() {
   }, "確認更改"), /*#__PURE__*/React.createElement("button", {
     onClick: () => setShowChangePw(false),
     style: { flex: 1, background: C.divider, color: C.textSub, border: `1px solid ${C.border}`, borderRadius: 8, padding: "10px", fontSize: 18, cursor: "pointer" }
-  }, "取消"))), /*#__PURE__*/React.createElement("div", {
+  }, "取消"))), me && me.role === "管理員" && /*#__PURE__*/React.createElement("div", {
+    style: {
+      margin: "0 14px 12px",
+      background: C.card,
+      borderRadius: 10,
+      padding: "14px",
+      border: `1.5px solid ${C.accent}`
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: { fontSize: 18, fontWeight: 700, color: C.accent, marginBottom: 10 }
+  }, "📤 上傳班表（管理員）"), /*#__PURE__*/React.createElement("div", {
+    style: { fontSize: 15, color: C.textSub, marginBottom: 10 }
+  }, "上傳仁寶匯出的排班表 Excel，系統會自動拆解並覆蓋現有班表。"), /*#__PURE__*/React.createElement("input", {
+    type: "file",
+    accept: ".xlsx,.xls",
+    disabled: uploading,
+    onChange: async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      setUploading(true);
+      setUploadMsg("讀取檔案中…");
+      try {
+        const b64 = await new Promise((res, rej) => {
+          const reader = new FileReader();
+          reader.onload = () => res(reader.result.split(",")[1]);
+          reader.onerror = () => rej(new Error("讀取失敗"));
+          reader.readAsDataURL(file);
+        });
+        setUploadMsg("上傳拆解中…（約需 30 秒）");
+        const resp = await fetch(API_URL, {
+          method: "POST",
+          body: JSON.stringify({ action: "uploadSchedule", empId: me.empId, role: me.role, fileData: b64 }),
+        });
+        const r = await resp.json();
+        setUploadMsg(r.ok ? `✅ ${r.msg}（${r.count} 筆）` : `❌ ${r.msg}`);
+        if (r.ok) loadDay(me.empId, pickMonth, pickDay);
+      } catch (err) {
+        setUploadMsg("❌ 上傳失敗：" + err.message);
+      }
+      setUploading(false);
+      e.target.value = "";
+    },
+    style: { fontSize: 16, marginBottom: 8 }
+  }), uploadMsg && /*#__PURE__*/React.createElement("div", {
+    style: { fontSize: 16, color: uploadMsg.includes("✅") ? C.ok : uploadMsg.includes("❌") ? C.danger : C.textSub, fontWeight: 600 }
+  }, uploadMsg)), /*#__PURE__*/React.createElement("div", {
     style: {
       margin: "0 14px 12px",
       background: C.card,
