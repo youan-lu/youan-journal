@@ -568,35 +568,6 @@ const SkinStatus = ({
   }, o.label))));
 };
 
-// ── 語音輸入：手機瀏覽器內建辨識（iPhone Safari + Android Chrome 皆支援）──
-const getSpeechRecognition = () => window.SpeechRecognition || window.webkitSpeechRecognition || null;
-const voiceSupported = () => !!getSpeechRecognition();
-
-// ── AI 只修同音錯字（不改意思、不寫漂亮、不加東西）──
-async function fixTypos(rawText, codeName) {
-  const prompt = "你是台灣長照服務日誌的錯字校正助手。照服員用語音輸入「" + codeName + "」這項服務的內容，" + "語音辨識常出現同音錯字。請只做一件事：把同音錯字改成正確的字。\n" + "嚴格規則：①只改錯字，不改變原意 ②不要把句子改漂亮、不要潤飾 ③不要新增任何沒講到的內容 " + "④不要刪掉有講到的內容 ⑤只回傳修正後的文字本身，不要加任何說明、引號或標點以外的東西。\n\n" + "原始辨識文字：" + rawText;
-  try {
-    const resp = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-6",
-        max_tokens: 1000,
-        messages: [{
-          role: "user",
-          content: prompt
-        }]
-      })
-    });
-    const data = await resp.json();
-    const out = (data.content || []).filter(b => b.type === "text").map(b => b.text).join("").trim();
-    return out || rawText;
-  } catch (e) {
-    return rawText; // 連線失敗就用原文，至少不漏資料
-  }
-}
 const CodeBlock = ({
   codeItem,
   value,
@@ -609,61 +580,6 @@ const CodeBlock = ({
   saved
 }) => {
   const [showChips, setShowChips] = useState(false);
-  const [voiceStep, setVoiceStep] = useState(null); // null | 'listening' | 'fixing' | 'confirm'
-  const [voiceRaw, setVoiceRaw] = useState("");
-  const [voiceFixed, setVoiceFixed] = useState("");
-  const recRef = CodeBlock._recRef = CodeBlock._recRef || {
-    current: null
-  };
-  const startVoice = () => {
-    const SR = getSpeechRecognition();
-    if (!SR) {
-      alert("此手機瀏覽器不支援語音，請改用打字。建議用 Safari（iPhone）或 Chrome（Android）。");
-      return;
-    }
-    const rec = new SR();
-    rec.lang = "zh-TW";
-    rec.interimResults = false;
-    rec.maxAlternatives = 1;
-    recRef.current = rec;
-    setVoiceRaw("");
-    setVoiceFixed("");
-    setVoiceStep("listening");
-    rec.onresult = async ev => {
-      const text = ev.results[0][0].transcript || "";
-      setVoiceRaw(text);
-      setVoiceStep("fixing");
-      const fixed = await fixTypos(text, cleanName(codeItem.name));
-      setVoiceFixed(fixed);
-      setVoiceStep("confirm");
-    };
-    rec.onerror = ev => {
-      setVoiceStep(null);
-      if (ev.error === "not-allowed" || ev.error === "service-not-allowed") alert("請允許麥克風權限後再試一次。");else if (ev.error === "no-speech") alert("沒有聽到聲音，請再說一次。");
-    };
-    rec.onend = () => {
-      setVoiceStep(s => s === "listening" ? null : s);
-    };
-    try {
-      rec.start();
-    } catch (e) {
-      setVoiceStep(null);
-    }
-  };
-  const stopVoice = () => {
-    try {
-      recRef.current && recRef.current.stop();
-    } catch (e) {}
-  };
-  const acceptVoice = () => {
-    const cur = (value || "").trim();
-    onChange(cur ? cur + "、" + voiceFixed : voiceFixed);
-    setVoiceStep(null);
-  };
-  const redoVoice = () => {
-    setVoiceStep(null);
-    setTimeout(startVoice, 150);
-  };
   const [showMore, setShowMore] = useState(false);
   const personal = chips.filter(c => c.personal);
   const others = chips.filter(c => !c.personal);
@@ -780,21 +696,6 @@ const CodeBlock = ({
       flexWrap: "wrap"
     }
   }, /*#__PURE__*/React.createElement("button", {
-    onClick: voiceStep === "listening" ? stopVoice : startVoice,
-    style: {
-      background: voiceStep === "listening" ? C.danger : C.primary,
-      border: "none",
-      color: "white",
-      fontSize: 19,
-      cursor: "pointer",
-      padding: "7px 14px",
-      borderRadius: 18,
-      fontWeight: 700,
-      display: "flex",
-      alignItems: "center",
-      gap: 6
-    }
-  }, voiceStep === "listening" ? "■ 停止" : "🎤 按住說話"), /*#__PURE__*/React.createElement("button", {
     onClick: () => setShowChips(v => !v),
     style: {
       background: "none",
@@ -815,78 +716,7 @@ const CodeBlock = ({
       cursor: "pointer",
       padding: 0
     }
-  }, "清空")), voiceStep === "listening" && /*#__PURE__*/React.createElement("div", {
-    style: {
-      background: C.primaryLight,
-      borderRadius: 8,
-      padding: "10px 12px",
-      fontSize: 18,
-      color: C.primary,
-      fontWeight: 600
-    }
-  }, "🎤 聆聽中…請說出「", cleanName(codeItem.name), "」的服務內容，講完按「停止」"), voiceStep === "fixing" && /*#__PURE__*/React.createElement("div", {
-    style: {
-      background: C.warnLight,
-      borderRadius: 8,
-      padding: "10px 12px",
-      fontSize: 18,
-      color: C.warn,
-      fontWeight: 600
-    }
-  }, "✍️ 校正錯字中…"), voiceStep === "confirm" && /*#__PURE__*/React.createElement("div", {
-    style: {
-      background: C.cream,
-      border: `1.5px solid ${C.bear}`,
-      borderRadius: 8,
-      padding: "12px",
-      display: "flex",
-      flexDirection: "column",
-      gap: 8
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 15,
-      color: C.textSub
-    }
-  }, "聽到：", voiceRaw), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 19,
-      color: C.text,
-      fontWeight: 600
-    }
-  }, "校正後：", voiceFixed), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 10,
-      marginTop: 2
-    }
-  }, /*#__PURE__*/React.createElement("button", {
-    onClick: acceptVoice,
-    style: {
-      flex: 1,
-      background: C.ok,
-      color: "white",
-      border: "none",
-      borderRadius: 8,
-      padding: "10px",
-      fontSize: 19,
-      fontWeight: 700,
-      cursor: "pointer"
-    }
-  }, "✓ 採用"), /*#__PURE__*/React.createElement("button", {
-    onClick: redoVoice,
-    style: {
-      flex: 1,
-      background: "white",
-      color: C.primary,
-      border: `1.5px solid ${C.primary}`,
-      borderRadius: 8,
-      padding: "10px",
-      fontSize: 19,
-      fontWeight: 600,
-      cursor: "pointer"
-    }
-  }, "↻ 重講"))), value && /*#__PURE__*/React.createElement("button", {
+  }, "清空")), value && /*#__PURE__*/React.createElement("button", {
     onClick: onSaveTemplate,
     disabled: saved,
     style: {
