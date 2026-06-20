@@ -581,8 +581,8 @@ const CodeBlock = ({
 }) => {
   const [showChips, setShowChips] = useState(false);
   const [showMore, setShowMore] = useState(false);
-  const personal = chips.filter(c => c.personal);
-  const others = chips.filter(c => !c.personal);
+  // 全部混合，照使用次數排序
+  const allChips = [...chips].sort((a, b) => b.freq - a.freq);
   const addChip = phrase => {
     const cur = (value || "").trim();
     if (!cur) {
@@ -706,7 +706,7 @@ const CodeBlock = ({
       padding: 0,
       fontWeight: 600
     }
-  }, showChips ? "▲ 收起項目" : "＋ 點選慣用語加入"), value && /*#__PURE__*/React.createElement("button", {
+  }, showChips ? "▲ 收起" : "📋 常用資料庫"), value && /*#__PURE__*/React.createElement("button", {
     onClick: () => onChange(""),
     style: {
       background: "none",
@@ -731,34 +731,23 @@ const CodeBlock = ({
       fontWeight: 700,
       cursor: saved ? "default" : "pointer"
     }
-  }, saved ? "✓ 已設為慣用語" : "⭐ 把這句設為慣用語"), showChips && /*#__PURE__*/React.createElement("div", {
+  }, saved ? "✓ 已加入常用" : "⭐ 加入常用資料庫"), showChips && /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       flexDirection: "column",
       gap: 8,
       marginTop: 2
     }
-  }, personal.length > 0 && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 16,
-      color: C.textSub,
-      marginBottom: 5
-    }
-  }, "你的慣用語（依使用頻率）"), /*#__PURE__*/React.createElement("div", {
+  }, allChips.length > 0 ? /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       flexWrap: "wrap",
       gap: 6
     }
-  }, personal.map((c, i) => /*#__PURE__*/React.createElement(Chip, {
+  }, allChips.slice(0, showMore ? allChips.length : 10).map((c, i) => /*#__PURE__*/React.createElement(Chip, {
     key: i,
     c: c
-  })))), personal.length === 0 && /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 17,
-      color: C.textSub
-    }
-  }, "尚無個人慣用語，可從範本庫選或直接打字"), others.length > 0 && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("button", {
+  }))), allChips.length > 10 && /*#__PURE__*/React.createElement("button", {
     onClick: () => setShowMore(v => !v),
     style: {
       background: "none",
@@ -766,19 +755,15 @@ const CodeBlock = ({
       color: C.primary,
       fontSize: 17,
       cursor: "pointer",
-      padding: 0,
+      padding: "6px 0 0 0",
       fontWeight: 600
     }
-  }, showMore ? "▲ 收起範本庫" : `⋯ 從範本庫找更多 (${others.length})`), showMore && /*#__PURE__*/React.createElement("div", {
+  }, showMore ? "▲ 收起" : `⋯ 更多 (${allChips.length - 10})`)) : /*#__PURE__*/React.createElement("div", {
     style: {
-      display: "flex",
-      flexWrap: "wrap",
-      gap: 6,
-      marginTop: 6
+      fontSize: 17,
+      color: C.textSub
     }
-  }, others.map((c, i) => /*#__PURE__*/React.createElement(Chip, {
-    key: i,
-    c: c
+  }, "尚無常用資料，可直接打字或語音輸入    c: c
   })))))));
 };
 function App() {
