@@ -11,7 +11,7 @@
 <style>
   * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
   html, body { margin: 0; padding: 0; background: #F3EFE6; font-family: 'Noto Sans TC', sans-serif; }
-  #root { max-width: 480px; margin: 0 auto; }
+  #root { width: 100%; max-width: 600px; margin: 0 auto; }
   input, select, textarea, button { font-family: 'Noto Sans TC', sans-serif; }
   #loading { text-align:center; padding:80px 20px; color:#6E6A5F; font-size:18px; }
 </style>
@@ -494,6 +494,7 @@ function App() {
   // 從後端抓來的當日班表 + 個人慣用語
   const [dayList, setDayList] = useState([]); // 取代 REAL_DAY
   const [phrases, setPhrases] = useState({}); // {個案_BA碼: [{text,count}]}
+  const [byCode, setByCode] = useState({}); // {BA碼: [{text,count}]} 同碼跨個案彙整
   const [loadingDay, setLoadingDay] = useState(false);
   const [screen, setScreen] = useState("login"); // login → list → fill → done
   const [activeIdx, setActiveIdx] = useState(null);
@@ -553,6 +554,7 @@ function App() {
       })]);
       setDayList(dayR.ok ? dayR.day : []);
       setPhrases(phR.ok ? phR.phrases : {});
+      setByCode(phR.ok ? phR.byCode || {} : {});
     } catch (e) {
       setDayList([]);
     }
@@ -579,9 +581,9 @@ function App() {
       const init = {},
         fl = {};
       s.codes.forEach(c => {
-        // 從後端慣用語帶入「最常用」那句（依次數排序的第一個）
+        // 從後端慣用語帶入「最常用」那句：先找精確個案+BA碼，沒有就用同BA碼彙整
         const key = `${s.client}_${c.code}`;
-        const list = phrases[key];
+        const list = phrases[key] && phrases[key].length > 0 ? phrases[key] : byCode[c.code];
         if (list && list.length > 0) {
           init[c.code] = list[0].text;
           fl[c.code] = true;
@@ -1167,11 +1169,21 @@ function App() {
     codeItem: c,
     extra: c.extra,
     fromLast: fromLastMap[c.code],
-    chips: (phrases[`${session.client}_${c.code}`] || []).map(p => ({
-      t: p.text,
-      freq: p.count,
-      personal: true
-    })),
+    chips: (() => {
+      const exact = phrases[`${session.client}_${c.code}`] || [];
+      const all = byCode[c.code] || [];
+      const seen = new Set(exact.map(p => p.text));
+      // 精確對應標 personal（最相關），其餘同碼句子當補充
+      return [...exact.map(p => ({
+        t: p.text,
+        freq: p.count,
+        personal: true
+      })), ...all.filter(p => !seen.has(p.text)).map(p => ({
+        t: p.text,
+        freq: p.count,
+        personal: false
+      }))];
+    })(),
     value: codeValues[c.code] || "",
     saved: savedTemplates[c.code],
     onChange: v => {
