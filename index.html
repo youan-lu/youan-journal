@@ -793,6 +793,11 @@ function App() {
   const [savedTemplates, setSavedTemplates] = useState({});
   const [submitted, setSubmitted] = useState([]);
   const [savedData, setSavedData] = useState({}); // idx -> {codeValues, skin, extraCodes}
+  const [showChangePw, setShowChangePw] = useState(false);
+  const [oldPw, setOldPw] = useState("");
+  const [newPw, setNewPw] = useState("");
+  const [newPw2, setNewPw2] = useState("");
+  const [pwMsg, setPwMsg] = useState("");
 
   const _wd = ["日", "一", "二", "三", "四", "五", "六"][_now.getDay()];
   const today = `${_now.getFullYear() - 1911}年${_now.getMonth() + 1}月${_now.getDate()}日（${_wd}）`;
@@ -1160,7 +1165,63 @@ function App() {
       color: C.textSub,
       cursor: "pointer"
     }
-  }, "登出")), /*#__PURE__*/React.createElement("div", {
+  }, "登出"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => { setShowChangePw(true); setOldPw(""); setNewPw(""); setNewPw2(""); setPwMsg(""); },
+    style: {
+      background: C.divider,
+      border: `1px solid ${C.border}`,
+      borderRadius: 8,
+      padding: "6px 12px",
+      fontSize: 15,
+      color: C.textSub,
+      cursor: "pointer"
+    }
+  }, "更改密碼")), showChangePw && /*#__PURE__*/React.createElement("div", {
+    style: {
+      margin: "0 14px 12px",
+      background: C.card,
+      borderRadius: 10,
+      padding: "14px",
+      border: `1.5px solid ${C.primary}`
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: { fontSize: 18, fontWeight: 700, color: C.primary, marginBottom: 10 }
+  }, "🔑 更改密碼"), /*#__PURE__*/React.createElement("input", {
+    type: "password",
+    placeholder: "舊密碼",
+    value: oldPw,
+    onChange: e => setOldPw(e.target.value),
+    style: { width: "100%", padding: "8px 10px", fontSize: 18, border: `1px solid ${C.border}`, borderRadius: 7, marginBottom: 8, boxSizing: "border-box" }
+  }), /*#__PURE__*/React.createElement("input", {
+    type: "password",
+    placeholder: "新密碼（至少4碼）",
+    value: newPw,
+    onChange: e => setNewPw(e.target.value),
+    style: { width: "100%", padding: "8px 10px", fontSize: 18, border: `1px solid ${C.border}`, borderRadius: 7, marginBottom: 8, boxSizing: "border-box" }
+  }), /*#__PURE__*/React.createElement("input", {
+    type: "password",
+    placeholder: "再輸入一次新密碼",
+    value: newPw2,
+    onChange: e => setNewPw2(e.target.value),
+    style: { width: "100%", padding: "8px 10px", fontSize: 18, border: `1px solid ${C.border}`, borderRadius: 7, marginBottom: 8, boxSizing: "border-box" }
+  }), pwMsg && /*#__PURE__*/React.createElement("div", {
+    style: { fontSize: 16, color: pwMsg.includes("成功") ? C.ok : C.danger, marginBottom: 8, fontWeight: 600 }
+  }, pwMsg), /*#__PURE__*/React.createElement("div", {
+    style: { display: "flex", gap: 8 }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: async () => {
+      if (newPw !== newPw2) { setPwMsg("兩次新密碼不一致"); return; }
+      if (newPw.length < 4) { setPwMsg("新密碼至少4碼"); return; }
+      setPwMsg("更新中…");
+      const r = await callAPI("changePw", { empId: me.empId, oldPw, newPw });
+      setPwMsg(r.ok ? "✅ 密碼更改成功" : r.msg || "更改失敗");
+      if (r.ok) setTimeout(() => setShowChangePw(false), 1500);
+    },
+    style: { flex: 1, background: C.primary, color: "white", border: "none", borderRadius: 8, padding: "10px", fontSize: 18, fontWeight: 700, cursor: "pointer" }
+  }, "確認更改"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setShowChangePw(false),
+    style: { flex: 1, background: C.divider, color: C.textSub, border: `1px solid ${C.border}`, borderRadius: 8, padding: "10px", fontSize: 18, cursor: "pointer" }
+  }, "取消"))), /*#__PURE__*/React.createElement("div", {
     style: {
       margin: "0 14px 12px",
       background: C.card,
