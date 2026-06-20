@@ -499,7 +499,8 @@ const endHourOf = timeStr => {
 const Tag = ({
   code,
   name,
-  extra
+  extra,
+  qty
 }) => /*#__PURE__*/React.createElement("span", {
   style: {
     display: "inline-flex",
@@ -513,7 +514,7 @@ const Tag = ({
     fontSize: 21,
     fontWeight: 600
   }
-}, code, /*#__PURE__*/React.createElement("span", {
+}, code, qty && qty > 1 ? `×${qty}` : "", /*#__PURE__*/React.createElement("span", {
   style: {
     fontWeight: 400,
     color: C.textSub
@@ -633,7 +634,8 @@ const CodeBlock = ({
   }, /*#__PURE__*/React.createElement(Tag, {
     code: codeItem.code,
     name: codeItem.name,
-    extra: extra
+    extra: extra,
+    qty: codeItem.qty
   }), extra && /*#__PURE__*/React.createElement("span", {
     style: {
       fontSize: 16,
@@ -1333,7 +1335,8 @@ function App() {
     }, s.codes.map((c, i) => /*#__PURE__*/React.createElement(Tag, {
       key: i,
       code: c.code,
-      name: c.name
+      name: c.name,
+      qty: c.qty
     }))));
   })), /*#__PURE__*/React.createElement(FooterBar, null));
   if (screen === "fill") return /*#__PURE__*/React.createElement("div", {
