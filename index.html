@@ -8,222 +8,480 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 <style>
-  * { -webkit-tap-highlight-color: transparent; }
+  * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
   html, body { margin: 0; padding: 0; background: #F3EFE6; font-family: 'Noto Sans TC', sans-serif; }
   #root { max-width: 480px; margin: 0 auto; }
   input, select, textarea, button { font-family: 'Noto Sans TC', sans-serif; }
+  #loading { text-align:center; padding:80px 20px; color:#6E6A5F; font-size:18px; }
 </style>
 </head>
 <body>
-<div id="root"></div>
-<script type="text/babel" data-presets="react">
+<div id="root"><div id="loading">載入中…</div></div>
+<script>
 const { useState, useEffect } = React;
-
 // ★ 後端網址（Apps Script Web App）
 const API = "https://script.google.com/macros/s/AKfycbzaC8FO59AZU-ITw3AQzUo-3lOUgv989CfU01d74M-NprLQQdtrfTwNKss5rY--F30rTg/exec";
 
 // 呼叫後端的小工具
 async function callAPI(action, params = {}) {
-  const qs = new URLSearchParams({ action, ...params }).toString();
+  const qs = new URLSearchParams({
+    action,
+    ...params
+  }).toString();
   const res = await fetch(`${API}?${qs}`);
   return await res.json();
 }
-
 const _now = new Date();
 const NOW_HOUR = _now.getHours() + _now.getMinutes() / 60; // 真實當前時間
-const NOW_STR = `${String(_now.getHours()).padStart(2,"0")}:${String(_now.getMinutes()).padStart(2,"0")}`;
-
-const cleanName = (n) => n.replace(/\(.*?\)/g, "");
-
-const ALL_CODES = [
-  { code: "BA01", name: "基本身體清潔" }, { code: "BA02", name: "基本日常照顧" },
-  { code: "BA03", name: "測量生命徵象" }, { code: "BA04", name: "協助餵食或灌食" },
-  { code: "BA05", name: "餐食照顧" }, { code: "BA07", name: "協助沐浴及洗頭" },
-  { code: "BA08", name: "足部照護" }, { code: "BA10", name: "翻身拍背" },
-  { code: "BA11", name: "肢體關節活動" }, { code: "BA12", name: "協助上下樓梯" },
-  { code: "BA13", name: "陪同外出" }, { code: "BA14", name: "陪同就醫" },
-  { code: "BA15", name: "家務協助" }, { code: "BA16", name: "代購或代領" },
-  { code: "BA18", name: "安全看視" }, { code: "BA20", name: "陪伴服務" },
-  { code: "BA22", name: "巡視服務" }, { code: "BA23", name: "協助洗頭" },
-  { code: "BA24", name: "協助排泄" }, { code: "GA09", name: "居家喘息服務" },
-];
-
+const NOW_STR = `${String(_now.getHours()).padStart(2, "0")}:${String(_now.getMinutes()).padStart(2, "0")}`;
+const cleanName = n => n.replace(/\(.*?\)/g, "");
+const ALL_CODES = [{
+  code: "BA01",
+  name: "基本身體清潔"
+}, {
+  code: "BA02",
+  name: "基本日常照顧"
+}, {
+  code: "BA03",
+  name: "測量生命徵象"
+}, {
+  code: "BA04",
+  name: "協助餵食或灌食"
+}, {
+  code: "BA05",
+  name: "餐食照顧"
+}, {
+  code: "BA07",
+  name: "協助沐浴及洗頭"
+}, {
+  code: "BA08",
+  name: "足部照護"
+}, {
+  code: "BA10",
+  name: "翻身拍背"
+}, {
+  code: "BA11",
+  name: "肢體關節活動"
+}, {
+  code: "BA12",
+  name: "協助上下樓梯"
+}, {
+  code: "BA13",
+  name: "陪同外出"
+}, {
+  code: "BA14",
+  name: "陪同就醫"
+}, {
+  code: "BA15",
+  name: "家務協助"
+}, {
+  code: "BA16",
+  name: "代購或代領"
+}, {
+  code: "BA18",
+  name: "安全看視"
+}, {
+  code: "BA20",
+  name: "陪伴服務"
+}, {
+  code: "BA22",
+  name: "巡視服務"
+}, {
+  code: "BA23",
+  name: "協助洗頭"
+}, {
+  code: "BA24",
+  name: "協助排泄"
+}, {
+  code: "GA09",
+  name: "居家喘息服務"
+}];
 const C = {
-  bg: "#F3EFE6", card: "#FFFFFF",
-  primary: "#3A5A40", primaryDark: "#2D4732", primaryLight: "#E5EBE0",
-  accent: "#C75B39", accentLight: "#FBEDE7", accentBorder: "#E0A88F",
-  ok: "#3E8E5A", okLight: "#E4F1E8",
-  warn: "#C77B30", warnLight: "#FBF0DD",
-  danger: "#C0453A", dangerLight: "#FBE9E6",
-  cream: "#FAF6EC", creamDark: "#F0E9D8",
+  bg: "#F3EFE6",
+  card: "#FFFFFF",
+  primary: "#3A5A40",
+  primaryDark: "#2D4732",
+  primaryLight: "#E5EBE0",
+  accent: "#C75B39",
+  accentLight: "#FBEDE7",
+  accentBorder: "#E0A88F",
+  ok: "#3E8E5A",
+  okLight: "#E4F1E8",
+  warn: "#C77B30",
+  warnLight: "#FBF0DD",
+  danger: "#C0453A",
+  dangerLight: "#FBE9E6",
+  cream: "#FAF6EC",
+  creamDark: "#F0E9D8",
   bear: "#C9A66B",
-  text: "#2B2B2B", textSub: "#6E6A5F", border: "#E5DFD0", divider: "#EFE9DB",
+  text: "#2B2B2B",
+  textSub: "#6E6A5F",
+  border: "#E5DFD0",
+  divider: "#EFE9DB"
 };
 
 // 佑安 Logo：三顆頭 + 底部大圓弧（三人協力意象）
 const LOGO_SRC = "data:image/png;base64,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";
-const YouanLogo = ({ size = 30 }) => (
-  <img src={LOGO_SRC} alt="佑安" width={size * 0.96} height={size} style={{ flexShrink: 0, display: "block", objectFit: "contain" }} />
-);
+const YouanLogo = ({
+  size = 30
+}) => /*#__PURE__*/React.createElement("img", {
+  src: LOGO_SRC,
+  alt: "佑安",
+  width: size * 0.96,
+  height: size,
+  style: {
+    flexShrink: 0,
+    display: "block",
+    objectFit: "contain"
+  }
+});
 
 // DM風格：墨綠圓角膠囊標題
-const PillTitle = ({ icon, children }) => (
-  <div style={{ display: "inline-flex", alignItems: "center", gap: 8,
-    background: C.primary, color: "white", borderRadius: 22,
-    padding: "7px 18px", fontSize: 19, fontWeight: 700 }}>
-    {icon && <span style={{ fontSize: 19 }}>{icon}</span>}{children}
-  </div>
-);
+const PillTitle = ({
+  icon,
+  children
+}) => /*#__PURE__*/React.createElement("div", {
+  style: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 8,
+    background: C.primary,
+    color: "white",
+    borderRadius: 22,
+    padding: "7px 18px",
+    fontSize: 19,
+    fontWeight: 700
+  }
+}, icon && /*#__PURE__*/React.createElement("span", {
+  style: {
+    fontSize: 19
+  }
+}, icon), children);
 
 // DM風格：頁尾 Logo 橫條
-const FooterBar = () => (
-  <div style={{ background: C.primary, padding: "16px", display: "flex", alignItems: "center", justifyContent: "center", gap: 10, marginTop: 10 }}>
-    <YouanLogo size={32} color={C.bear} />
-    <div style={{ textAlign: "center" }}>
-      <div style={{ color: "white", fontSize: 16, fontWeight: 700, letterSpacing: 1 }}>佑安居家長照機構</div>
-      <div style={{ color: "rgba(255,255,255,.6)", fontSize: 9, letterSpacing: 1 }}>Youan Long Term Care Institutions</div>
-    </div>
-  </div>
-);
-
-const endHourOf = (timeStr) => {
+const FooterBar = () => /*#__PURE__*/React.createElement("div", {
+  style: {
+    background: C.primary,
+    padding: "16px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    marginTop: 10
+  }
+}, /*#__PURE__*/React.createElement(YouanLogo, {
+  size: 32,
+  color: C.bear
+}), /*#__PURE__*/React.createElement("div", {
+  style: {
+    textAlign: "center"
+  }
+}, /*#__PURE__*/React.createElement("div", {
+  style: {
+    color: "white",
+    fontSize: 16,
+    fontWeight: 700,
+    letterSpacing: 1
+  }
+}, "佑安居家長照機構"), /*#__PURE__*/React.createElement("div", {
+  style: {
+    color: "rgba(255,255,255,.6)",
+    fontSize: 9,
+    letterSpacing: 1
+  }
+}, "Youan Long Term Care Institutions")));
+const endHourOf = timeStr => {
   const m = timeStr.match(/~(\d{2}):(\d{2})/);
   return m ? parseInt(m[1]) + parseInt(m[2]) / 60 : 24;
 };
-
-const Tag = ({ code, name, extra }) => (
-  <span style={{ display: "inline-flex", alignItems: "center", gap: 4,
-    background: extra ? C.accentLight : C.primaryLight, color: extra ? C.accent : C.primary,
+const Tag = ({
+  code,
+  name,
+  extra
+}) => /*#__PURE__*/React.createElement("span", {
+  style: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 4,
+    background: extra ? C.accentLight : C.primaryLight,
+    color: extra ? C.accent : C.primary,
     border: extra ? `1px solid ${C.accentBorder}` : "none",
-    borderRadius: 6, padding: "2px 8px", fontSize: 21, fontWeight: 600 }}>
-    {code}<span style={{ fontWeight: 400, color: C.textSub }}>{cleanName(name)}</span>
-  </span>
-);
-
-const SkinStatus = ({ value, onChange }) => {
-  const opts = [
-    { v: "ok", label: "服務中無發現異常" },
-    { v: "prev", label: "異常狀況如前次" },
-    { v: "new", label: "有異常（請說明）" },
-  ];
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-      {opts.map(o => (
-        <label key={o.v} style={{ display: "flex", alignItems: "center", gap: 10,
-          background: value === o.v ? C.okLight : C.divider,
-          border: `1.5px solid ${value === o.v ? C.ok : "transparent"}`,
-          borderRadius: 8, padding: "10px 12px", cursor: "pointer" }}>
-          <div style={{ width: 18, height: 18, borderRadius: "50%",
-            border: `2px solid ${value === o.v ? C.ok : C.border}`,
-            background: value === o.v ? C.ok : "white", flexShrink: 0 }} />
-          <span style={{ fontSize: 19, color: C.text }}>{o.label}</span>
-        </label>
-      ))}
-    </div>
-  );
+    borderRadius: 6,
+    padding: "2px 8px",
+    fontSize: 21,
+    fontWeight: 600
+  }
+}, code, /*#__PURE__*/React.createElement("span", {
+  style: {
+    fontWeight: 400,
+    color: C.textSub
+  }
+}, cleanName(name)));
+const SkinStatus = ({
+  value,
+  onChange
+}) => {
+  const opts = [{
+    v: "ok",
+    label: "服務中無發現異常"
+  }, {
+    v: "prev",
+    label: "異常狀況如前次"
+  }, {
+    v: "new",
+    label: "有異常（請說明）"
+  }];
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 6
+    }
+  }, opts.map(o => /*#__PURE__*/React.createElement("label", {
+    key: o.v,
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 10,
+      background: value === o.v ? C.okLight : C.divider,
+      border: `1.5px solid ${value === o.v ? C.ok : "transparent"}`,
+      borderRadius: 8,
+      padding: "10px 12px",
+      cursor: "pointer"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 18,
+      height: 18,
+      borderRadius: "50%",
+      border: `2px solid ${value === o.v ? C.ok : C.border}`,
+      background: value === o.v ? C.ok : "white",
+      flexShrink: 0
+    }
+  }), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 19,
+      color: C.text
+    }
+  }, o.label))));
 };
-
-const CodeBlock = ({ codeItem, value, onChange, extra, onRemove, fromLast, chips, onSaveTemplate, saved }) => {
+const CodeBlock = ({
+  codeItem,
+  value,
+  onChange,
+  extra,
+  onRemove,
+  fromLast,
+  chips,
+  onSaveTemplate,
+  saved
+}) => {
   const [showChips, setShowChips] = useState(false);
   const [showMore, setShowMore] = useState(false);
   const personal = chips.filter(c => c.personal);
   const others = chips.filter(c => !c.personal);
-
-  const addChip = (phrase) => {
+  const addChip = phrase => {
     const cur = (value || "").trim();
-    if (!cur) { onChange(phrase); return; }
+    if (!cur) {
+      onChange(phrase);
+      return;
+    }
     if (cur.split("、").includes(phrase)) return;
     onChange(cur + "、" + phrase);
   };
-  const has = (t) => (value || "").split("、").includes(t);
-
-  const Chip = ({ c }) => (
-    <button onClick={() => addChip(c.t)} disabled={has(c.t)} style={{
+  const has = t => (value || "").split("、").includes(t);
+  const Chip = ({
+    c
+  }) => /*#__PURE__*/React.createElement("button", {
+    onClick: () => addChip(c.t),
+    disabled: has(c.t),
+    style: {
       background: has(c.t) ? C.okLight : C.primaryLight,
       border: `1px solid ${has(c.t) ? C.ok : C.border}`,
-      borderRadius: 14, padding: "5px 11px", fontSize: 18,
-      color: has(c.t) ? C.ok : C.text, cursor: has(c.t) ? "default" : "pointer" }}>
-      {has(c.t) ? "✓ " : "+ "}{c.t}
-    </button>
-  );
-
-  return (
-    <div style={{ border: `1.5px solid ${extra ? C.accentBorder : (value ? C.ok : C.border)}`,
-      borderRadius: 10, overflow: "hidden",
-      background: extra ? C.accentLight : (value ? C.okLight : C.card) }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: "10px 14px", background: extra ? C.accentLight : (value ? C.okLight : C.divider),
-        borderBottom: `1px solid ${C.border}` }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          <Tag code={codeItem.code} name={codeItem.name} extra={extra} />
-          {extra && <span style={{ fontSize: 16, color: C.accent, fontWeight: 700 }}>⚠️ 非排定</span>}
-          {fromLast && !extra && <span style={{ fontSize: 16, color: C.ok, fontWeight: 600 }}>↩ 已帶上次</span>}
-        </div>
-        {extra
-          ? <button onClick={onRemove} style={{ background: "none", border: "none", color: C.danger, fontSize: 17, cursor: "pointer", fontWeight: 600 }}>移除</button>
-          : (value && <span style={{ fontSize: 16, color: C.ok, fontWeight: 600 }}>✓</span>)}
-      </div>
-      <div style={{ padding: "10px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
-        <textarea placeholder={`填寫 ${cleanName(codeItem.name)} 服務內容…`}
-          value={value} onChange={e => onChange(e.target.value)} rows={2}
-          style={{ width: "100%", border: `1px solid ${C.border}`, borderRadius: 7,
-            padding: "8px 10px", fontSize: 19, resize: "none", fontFamily: "inherit",
-            color: C.text, background: "white", boxSizing: "border-box", outline: "none" }} />
-        <div style={{ display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
-          <button onClick={() => setShowChips(v => !v)} style={{ background: "none", border: "none",
-            color: C.primary, fontSize: 22, cursor: "pointer", padding: 0, fontWeight: 600 }}>
-            {showChips ? "▲ 收起項目" : "＋ 點選慣用語加入"}
-          </button>
-          {value && <button onClick={() => onChange("")} style={{ background: "none", border: "none", color: C.textSub, fontSize: 22, cursor: "pointer", padding: 0 }}>清空</button>}
-        </div>
-        {value && (
-          <button onClick={onSaveTemplate} disabled={saved} style={{
-            alignSelf: "flex-start", marginTop: 2,
-            background: saved ? C.okLight : C.accentLight,
-            color: saved ? C.ok : C.accent,
-            border: `1.5px solid ${saved ? C.ok : C.accent}`,
-            borderRadius: 10, padding: "8px 14px", fontSize: 18, fontWeight: 700,
-            cursor: saved ? "default" : "pointer" }}>
-            {saved ? "✓ 已設為慣用語" : "⭐ 把這句設為慣用語"}
-          </button>
-        )}
-        {showChips && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 2 }}>
-            {personal.length > 0 && (
-              <div>
-                <div style={{ fontSize: 16, color: C.textSub, marginBottom: 5 }}>你的慣用語（依使用頻率）</div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                  {personal.map((c, i) => <Chip key={i} c={c} />)}
-                </div>
-              </div>
-            )}
-            {personal.length === 0 && (
-              <div style={{ fontSize: 17, color: C.textSub }}>尚無個人慣用語，可從範本庫選或直接打字</div>
-            )}
-            {others.length > 0 && (
-              <div>
-                <button onClick={() => setShowMore(v => !v)} style={{ background: "none", border: "none", color: C.primary, fontSize: 17, cursor: "pointer", padding: 0, fontWeight: 600 }}>
-                  {showMore ? "▲ 收起範本庫" : `⋯ 從範本庫找更多 (${others.length})`}
-                </button>
-                {showMore && (
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
-                    {others.map((c, i) => <Chip key={i} c={c} />)}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
-  );
+      borderRadius: 14,
+      padding: "5px 11px",
+      fontSize: 18,
+      color: has(c.t) ? C.ok : C.text,
+      cursor: has(c.t) ? "default" : "pointer"
+    }
+  }, has(c.t) ? "✓ " : "+ ", c.t);
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      border: `1.5px solid ${extra ? C.accentBorder : value ? C.ok : C.border}`,
+      borderRadius: 10,
+      overflow: "hidden",
+      background: extra ? C.accentLight : value ? C.okLight : C.card
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      padding: "10px 14px",
+      background: extra ? C.accentLight : value ? C.okLight : C.divider,
+      borderBottom: `1px solid ${C.border}`
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 8,
+      flexWrap: "wrap"
+    }
+  }, /*#__PURE__*/React.createElement(Tag, {
+    code: codeItem.code,
+    name: codeItem.name,
+    extra: extra
+  }), extra && /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 16,
+      color: C.accent,
+      fontWeight: 700
+    }
+  }, "⚠️ 非排定"), fromLast && !extra && /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 16,
+      color: C.ok,
+      fontWeight: 600
+    }
+  }, "↩ 已帶上次")), extra ? /*#__PURE__*/React.createElement("button", {
+    onClick: onRemove,
+    style: {
+      background: "none",
+      border: "none",
+      color: C.danger,
+      fontSize: 17,
+      cursor: "pointer",
+      fontWeight: 600
+    }
+  }, "移除") : value && /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 16,
+      color: C.ok,
+      fontWeight: 600
+    }
+  }, "✓")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "10px 14px",
+      display: "flex",
+      flexDirection: "column",
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement("textarea", {
+    placeholder: `填寫 ${cleanName(codeItem.name)} 服務內容…`,
+    value: value,
+    onChange: e => onChange(e.target.value),
+    rows: 2,
+    style: {
+      width: "100%",
+      border: `1px solid ${C.border}`,
+      borderRadius: 7,
+      padding: "8px 10px",
+      fontSize: 19,
+      resize: "none",
+      fontFamily: "inherit",
+      color: C.text,
+      background: "white",
+      boxSizing: "border-box",
+      outline: "none"
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 14,
+      alignItems: "center",
+      flexWrap: "wrap"
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => setShowChips(v => !v),
+    style: {
+      background: "none",
+      border: "none",
+      color: C.primary,
+      fontSize: 22,
+      cursor: "pointer",
+      padding: 0,
+      fontWeight: 600
+    }
+  }, showChips ? "▲ 收起項目" : "＋ 點選慣用語加入"), value && /*#__PURE__*/React.createElement("button", {
+    onClick: () => onChange(""),
+    style: {
+      background: "none",
+      border: "none",
+      color: C.textSub,
+      fontSize: 22,
+      cursor: "pointer",
+      padding: 0
+    }
+  }, "清空")), value && /*#__PURE__*/React.createElement("button", {
+    onClick: onSaveTemplate,
+    disabled: saved,
+    style: {
+      alignSelf: "flex-start",
+      marginTop: 2,
+      background: saved ? C.okLight : C.accentLight,
+      color: saved ? C.ok : C.accent,
+      border: `1.5px solid ${saved ? C.ok : C.accent}`,
+      borderRadius: 10,
+      padding: "8px 14px",
+      fontSize: 18,
+      fontWeight: 700,
+      cursor: saved ? "default" : "pointer"
+    }
+  }, saved ? "✓ 已設為慣用語" : "⭐ 把這句設為慣用語"), showChips && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 8,
+      marginTop: 2
+    }
+  }, personal.length > 0 && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 16,
+      color: C.textSub,
+      marginBottom: 5
+    }
+  }, "你的慣用語（依使用頻率）"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexWrap: "wrap",
+      gap: 6
+    }
+  }, personal.map((c, i) => /*#__PURE__*/React.createElement(Chip, {
+    key: i,
+    c: c
+  })))), personal.length === 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 17,
+      color: C.textSub
+    }
+  }, "尚無個人慣用語，可從範本庫選或直接打字"), others.length > 0 && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("button", {
+    onClick: () => setShowMore(v => !v),
+    style: {
+      background: "none",
+      border: "none",
+      color: C.primary,
+      fontSize: 17,
+      cursor: "pointer",
+      padding: 0,
+      fontWeight: 600
+    }
+  }, showMore ? "▲ 收起範本庫" : `⋯ 從範本庫找更多 (${others.length})`), showMore && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexWrap: "wrap",
+      gap: 6,
+      marginTop: 6
+    }
+  }, others.map((c, i) => /*#__PURE__*/React.createElement(Chip, {
+    key: i,
+    c: c
+  })))))));
 };
-
 function App() {
   // 登入狀態
-  const [me, setMe] = useState(null);          // {empId, name, role} 登入後才有
+  const [me, setMe] = useState(null); // {empId, name, role} 登入後才有
   const [loginId, setLoginId] = useState("");
   const [loginPw, setLoginPw] = useState("");
   const [loginErr, setLoginErr] = useState("");
@@ -234,10 +492,9 @@ function App() {
   const [pickDay, setPickDay] = useState(_now.getDate());
 
   // 從後端抓來的當日班表 + 個人慣用語
-  const [dayList, setDayList] = useState([]);   // 取代 REAL_DAY
-  const [phrases, setPhrases] = useState({});   // {個案_BA碼: [{text,count}]}
+  const [dayList, setDayList] = useState([]); // 取代 REAL_DAY
+  const [phrases, setPhrases] = useState({}); // {個案_BA碼: [{text,count}]}
   const [loadingDay, setLoadingDay] = useState(false);
-
   const [screen, setScreen] = useState("login"); // login → list → fill → done
   const [activeIdx, setActiveIdx] = useState(null);
   const [skin, setSkin] = useState("ok");
@@ -249,18 +506,30 @@ function App() {
   const [submitted, setSubmitted] = useState([]);
   const [savedData, setSavedData] = useState({}); // idx -> {codeValues, skin, extraCodes}
 
-  const _wd = ["日","一","二","三","四","五","六"][_now.getDay()];
+  const _wd = ["日", "一", "二", "三", "四", "五", "六"][_now.getDay()];
   const today = `${_now.getFullYear() - 1911}年${_now.getMonth() + 1}月${_now.getDate()}日（${_wd}）`;
   const user = me ? `${me.name}　${me.empId}` : "";
   const session = activeIdx != null ? dayList[activeIdx] : null;
 
   // ── 登入 ──
   const doLogin = async () => {
-    setLoginErr(""); setBusy(true);
+    setLoginErr("");
+    setBusy(true);
     try {
-      const r = await callAPI("login", { empId: loginId.trim(), password: loginPw });
-      if (!r.ok) { setLoginErr(r.msg || "登入失敗"); setBusy(false); return; }
-      setMe({ empId: r.empId, name: r.name, role: r.role });
+      const r = await callAPI("login", {
+        empId: loginId.trim(),
+        password: loginPw
+      });
+      if (!r.ok) {
+        setLoginErr(r.msg || "登入失敗");
+        setBusy(false);
+        return;
+      }
+      setMe({
+        empId: r.empId,
+        name: r.name,
+        role: r.role
+      });
       setScreen("list");
       loadDay(r.empId, pickMonth, pickDay);
     } catch (e) {
@@ -271,12 +540,17 @@ function App() {
 
   // ── 抓某日班表 + 個人慣用語 ──
   const loadDay = async (empId, m, d) => {
-    setLoadingDay(true); setSubmitted([]); setSavedData({});
+    setLoadingDay(true);
+    setSubmitted([]);
+    setSavedData({});
     try {
-      const [dayR, phR] = await Promise.all([
-        callAPI("getDay", { empId, month: m, day: d }),
-        callAPI("getPhrases", { empId }),
-      ]);
+      const [dayR, phR] = await Promise.all([callAPI("getDay", {
+        empId,
+        month: m,
+        day: d
+      }), callAPI("getPhrases", {
+        empId
+      })]);
       setDayList(dayR.ok ? dayR.day : []);
       setPhrases(phR.ok ? phR.phrases : {});
     } catch (e) {
@@ -287,11 +561,11 @@ function App() {
 
   // 切換日期時重抓
   const changeDate = (m, d) => {
-    setPickMonth(m); setPickDay(d);
+    setPickMonth(m);
+    setPickDay(d);
     if (me) loadDay(me.empId, m, d);
   };
-
-  const handleOpen = (idx) => {
+  const handleOpen = idx => {
     const s = dayList[idx];
     setActiveIdx(idx);
     if (savedData[idx]) {
@@ -302,20 +576,25 @@ function App() {
       setFromLastMap({});
     } else {
       setSkin("ok");
-      const init = {}, fl = {};
+      const init = {},
+        fl = {};
       s.codes.forEach(c => {
         // 從後端慣用語帶入「最常用」那句（依次數排序的第一個）
         const key = `${s.client}_${c.code}`;
         const list = phrases[key];
-        if (list && list.length > 0) { init[c.code] = list[0].text; fl[c.code] = true; }
+        if (list && list.length > 0) {
+          init[c.code] = list[0].text;
+          fl[c.code] = true;
+        }
       });
-      setCodeValues(init); setFromLastMap(fl); setExtraCodes([]);
+      setCodeValues(init);
+      setFromLastMap(fl);
+      setExtraCodes([]);
     }
-    setShowAddPanel(false); setScreen("fill");
+    setShowAddPanel(false);
+    setScreen("fill");
   };
-
   const canSubmitTime = session && NOW_HOUR >= endHourOf(session.time);
-
   const handleSubmit = async () => {
     if (!canSubmitTime || busy) return;
     setBusy(true);
@@ -323,26 +602,44 @@ function App() {
     const records = codesInSession.map(c => ({
       code: c.code,
       summary: codeValues[c.code] || "",
-      extra: !!c.extra,
+      extra: !!c.extra
     }));
     const payload = {
-      empId: me.empId, empName: me.name,
+      empId: me.empId,
+      empName: me.name,
       serviceDate: `${_now.getFullYear() - 1911}/${pickMonth}/${pickDay}`,
-      client: session.client, time: session.time, bantype: session.bantype,
-      skin, records,
+      client: session.client,
+      time: session.time,
+      bantype: session.bantype,
+      skin,
+      records
     };
     try {
-      await callAPI("submit", { data: JSON.stringify(payload) });
+      await callAPI("submit", {
+        data: JSON.stringify(payload)
+      });
       // 同時把「設為慣用語」的句子存回後端
       for (const c of codesInSession) {
         if (savedTemplates[c.code] && codeValues[c.code]) {
           await callAPI("savePhrase", {
-            empId: me.empId, empName: me.name,
-            client: session.client, code: c.code, phrase: codeValues[c.code],
+            empId: me.empId,
+            empName: me.name,
+            client: session.client,
+            code: c.code,
+            phrase: codeValues[c.code]
           });
         }
       }
-      setSavedData(p => ({ ...p, [activeIdx]: { codeValues: { ...codeValues }, skin, extraCodes: [...extraCodes] } }));
+      setSavedData(p => ({
+        ...p,
+        [activeIdx]: {
+          codeValues: {
+            ...codeValues
+          },
+          skin,
+          extraCodes: [...extraCodes]
+        }
+      }));
       setSubmitted(prev => prev.includes(activeIdx) ? prev : [...prev, activeIdx]);
       setScreen("done");
     } catch (e) {
@@ -350,201 +647,693 @@ function App() {
     }
     setBusy(false);
   };
-
-  const codesInSession = session
-    ? [...session.codes.map(c => ({ ...c, extra: false })),
-       ...extraCodes.map(c => ({ ...c, extra: true }))]
-    : [];
-
-  const allFilled = codesInSession.length > 0 &&
-    codesInSession.every(c => codeValues[c.code]?.trim());
-
-  const addExtra = (c) => {
+  const codesInSession = session ? [...session.codes.map(c => ({
+    ...c,
+    extra: false
+  })), ...extraCodes.map(c => ({
+    ...c,
+    extra: true
+  }))] : [];
+  const allFilled = codesInSession.length > 0 && codesInSession.every(c => codeValues[c.code]?.trim());
+  const addExtra = c => {
     if (extraCodes.find(e => e.code === c.code) || session.codes.find(s => s.code === c.code)) return;
-    setExtraCodes(p => [...p, c]); setShowAddPanel(false);
+    setExtraCodes(p => [...p, c]);
+    setShowAddPanel(false);
   };
-  const removeExtra = (code) => {
+  const removeExtra = code => {
     setExtraCodes(p => p.filter(e => e.code !== code));
-    setCodeValues(p => { const n = { ...p }; delete n[code]; return n; });
+    setCodeValues(p => {
+      const n = {
+        ...p
+      };
+      delete n[code];
+      return n;
+    });
   };
 
   // 是否選的是「今天」（只有今天才需要時間鎖定）
-  const isToday = pickMonth === (_now.getMonth() + 1) && pickDay === _now.getDate();
+  const isToday = pickMonth === _now.getMonth() + 1 && pickDay === _now.getDate();
   const pickedDateStr = `${pickMonth}月${pickDay}日`;
 
   // ── 登入畫面 ──
-  if (screen === "login") return (
-    <div style={{ minHeight: "100vh", background: C.bg, fontFamily: "'Noto Sans TC', sans-serif", display: "flex", flexDirection: "column" }}>
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24 }}>
-        <YouanLogo size={72} />
-        <div style={{ fontSize: 24, fontWeight: 700, color: C.primary, marginTop: 16, marginBottom: 4, textAlign: "center" }}>佑安服務日誌</div>
-        <div style={{ fontSize: 17, color: C.textSub, marginBottom: 28 }}>線上填寫系統</div>
-        <div style={{ width: "100%", maxWidth: 340, display: "flex", flexDirection: "column", gap: 14 }}>
-          <div>
-            <div style={{ fontSize: 17, color: C.textSub, marginBottom: 6 }}>員工編號</div>
-            <input value={loginId} onChange={e => setLoginId(e.target.value)} placeholder="例如 an016"
-              style={{ width: "100%", border: `1.5px solid ${C.border}`, borderRadius: 10, padding: "13px 14px", fontSize: 20, fontFamily: "inherit", boxSizing: "border-box", outline: "none" }} />
-          </div>
-          <div>
-            <div style={{ fontSize: 17, color: C.textSub, marginBottom: 6 }}>密碼</div>
-            <input type="password" value={loginPw} onChange={e => setLoginPw(e.target.value)} placeholder="預設 0000"
-              onKeyDown={e => e.key === "Enter" && doLogin()}
-              style={{ width: "100%", border: `1.5px solid ${C.border}`, borderRadius: 10, padding: "13px 14px", fontSize: 20, fontFamily: "inherit", boxSizing: "border-box", outline: "none" }} />
-          </div>
-          {loginErr && <div style={{ background: C.dangerLight, border: `1px solid ${C.danger}`, borderRadius: 8, padding: "10px 12px", fontSize: 17, color: C.danger }}>{loginErr}</div>}
-          <button onClick={doLogin} disabled={busy || !loginId.trim() || !loginPw} style={{ width: "100%", background: (busy || !loginId.trim() || !loginPw) ? C.border : C.primary, color: (busy || !loginId.trim() || !loginPw) ? C.textSub : "white", border: "none", borderRadius: 10, padding: "15px", fontSize: 21, fontWeight: 700, cursor: busy ? "default" : "pointer", marginTop: 4 }}>
-            {busy ? "登入中…" : "登入"}
-          </button>
-          <div style={{ fontSize: 15, color: C.textSub, textAlign: "center", marginTop: 4, lineHeight: 1.6 }}>
-            首次登入密碼為 0000，請登入後盡快更改
-          </div>
-        </div>
-      </div>
-      <FooterBar />
-    </div>
-  );
-
-  if (screen === "list") return (
-    <div style={{ minHeight: "100vh", background: C.bg, fontFamily: "'Noto Sans TC', sans-serif" }}>
-      <div style={{ background: C.primary, color: "white", padding: "16px 16px 14px", position: "sticky", top: 0, zIndex: 10 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, marginBottom: 6 }}>
-          <YouanLogo size={34} color={C.bear} />
-          <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: .5, lineHeight: 1.3 }}>佑安服務日誌線上填寫系統</div>
-        </div>
-        <div style={{ fontSize: 21, opacity: .85, marginTop: 6, textAlign: "center" }}>{today}　現在 {NOW_STR}</div>
-      </div>
-      <div style={{ margin: "12px 14px", background: C.card, borderRadius: 10, padding: "12px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", border: `1px solid ${C.border}` }}>
-        <div>
-          <div style={{ fontSize: 18, color: C.textSub }}>照服員</div>
-          <div style={{ fontSize: 20, fontWeight: 700, color: C.text }}>{user}</div>
-        </div>
-        <button onClick={() => { setMe(null); setScreen("login"); setLoginId(""); setLoginPw(""); }} style={{ background: C.divider, border: `1px solid ${C.border}`, borderRadius: 8, padding: "6px 12px", fontSize: 15, color: C.textSub, cursor: "pointer" }}>登出</button>
-      </div>
-      {/* 選日期列 */}
-      <div style={{ margin: "0 14px 12px", background: C.card, borderRadius: 10, padding: "12px 14px", border: `1px solid ${C.border}` }}>
-        <div style={{ fontSize: 17, color: C.textSub, marginBottom: 8 }}>服務日期</div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          <select value={pickMonth} onChange={e => changeDate(parseInt(e.target.value), pickDay)} style={{ fontSize: 19, padding: "8px 10px", borderRadius: 8, border: `1px solid ${C.border}`, background: "white" }}>
-            {[5,6,7].map(m => <option key={m} value={m}>{m}月</option>)}
-          </select>
-          <select value={pickDay} onChange={e => changeDate(pickMonth, parseInt(e.target.value))} style={{ fontSize: 19, padding: "8px 10px", borderRadius: 8, border: `1px solid ${C.border}`, background: "white" }}>
-            {Array.from({length:31},(_,i)=>i+1).map(d => <option key={d} value={d}>{d}日</option>)}
-          </select>
-          {isToday && <span style={{ fontSize: 16, color: C.ok, fontWeight: 600 }}>今天</span>}
-        </div>
-      </div>
-      <div style={{ padding: "0 14px 24px", display: "flex", flexDirection: "column", gap: 10 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <PillTitle icon="📋">{pickedDateStr} 服務班次</PillTitle>
-          {!loadingDay && <span style={{ fontSize: 16, color: C.textSub }}>{dayList.length} 班</span>}
-        </div>
-        {loadingDay && <div style={{ textAlign: "center", padding: "30px 0", color: C.textSub, fontSize: 18 }}>讀取班表中…</div>}
-        {!loadingDay && dayList.length === 0 && <div style={{ textAlign: "center", padding: "30px 0", color: C.textSub, fontSize: 18 }}>這天沒有排班</div>}
-        {!loadingDay && dayList.map((s, idx) => {
-          const done = submitted.includes(idx);
-          const locked = isToday && NOW_HOUR < endHourOf(s.time);
-          return (
-            <div key={idx} style={{ background: C.card, borderRadius: 12, border: `1px solid ${done ? C.ok : C.border}`, borderLeft: `5px solid ${done ? C.ok : (locked ? C.warn : C.primary)}`, overflow: "hidden", boxShadow: "0 1px 3px rgba(47,74,53,.08)" }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 14px", background: done ? C.okLight : "#FFFFFF" }}>
-                <div>
-                  <div style={{ fontSize: 20, color: C.textSub, marginBottom: 3 }}>
-                    {s.time}{locked && !done && <span style={{ color: C.warn, marginLeft: 6, whiteSpace: "nowrap" }}>· 尚未結束</span>}
-                  </div>
-                  <div style={{ fontSize: 21, fontWeight: 700, color: C.text }}>{s.client}</div>
-                </div>
-                {done
-                  ? <button onClick={() => handleOpen(idx)} style={{ flexShrink: 0, background: C.okLight, border: `1px solid ${C.ok}`, borderRadius: 8, padding: "6px 12px", fontSize: 16, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}><span style={{ color: C.ok }}>✓ 已送出 · </span><span style={{ color: C.accent }}>可修改</span></button>
-                  : <button onClick={() => handleOpen(idx)} style={{ flexShrink: 0, background: locked ? C.warnLight : C.primary, color: locked ? C.warn : "white", border: locked ? `1px solid ${C.warn}` : "none", borderRadius: 8, padding: "6px 12px", fontSize: 16, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>{locked ? "可先編輯" : "填寫"}</button>}
-              </div>
-              <div style={{ padding: "8px 14px 10px", borderTop: `1px solid ${C.divider}`, background: "#FAF6EC", display: "flex", flexWrap: "wrap", gap: 6 }}>
-                {s.codes.map((c, i) => <Tag key={i} code={c.code} name={c.name} />)}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-      <FooterBar />
-    </div>
-  );
-
-  if (screen === "fill") return (
-    <div style={{ minHeight: "100vh", background: C.bg, fontFamily: "'Noto Sans TC', sans-serif" }}>
-      <div style={{ background: C.primary, color: "white", padding: "14px 16px", position: "sticky", top: 0, zIndex: 10, display: "flex", alignItems: "center", gap: 14 }}>
-        <button onClick={() => setScreen("list")} style={{ flexShrink: 0, background: "rgba(255,255,255,.12)", border: "1px solid rgba(255,255,255,.3)", color: "white", borderRadius: 10, padding: "12px 18px", fontSize: 18, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>← 返回</button>
-        <div>
-          <div style={{ fontSize: 21, fontWeight: 700, marginBottom: 2 }}>{session.client}</div>
-          <div style={{ fontSize: 17, opacity: .85, whiteSpace: "nowrap" }}>{session.time}</div>
-          <div style={{ fontSize: 17, opacity: .85, whiteSpace: "nowrap" }}>{today}</div>
-        </div>
-      </div>
-      <div style={{ padding: "14px 14px 100px", display: "flex", flexDirection: "column", gap: 14 }}>
-        {Object.keys(fromLastMap).length > 0 && (
-          <div style={{ background: C.okLight, border: `1px solid ${C.ok}`, borderRadius: 8, padding: "10px 14px", fontSize: 18, color: C.ok }}>
-            ↩ 已自動帶入上次服務內容，請確認、增減或修改
-          </div>
-        )}
-        {!canSubmitTime && (
-          <div style={{ background: C.warnLight, border: `1px solid ${C.warn}`, borderRadius: 8, padding: "10px 14px", fontSize: 18, color: C.warn }}>
-            🕐 此班 {session.time} 尚未結束，可先編輯，須等班次結束後才能送出
-          </div>
-        )}
-        <div style={{ background: C.card, borderRadius: 12, padding: "14px", border: `1px solid ${C.border}` }}>
-          <div style={{ marginBottom: 12 }}><PillTitle icon="🩺">身體或皮膚狀況</PillTitle></div>
-          <SkinStatus value={skin} onChange={setSkin} />
-          {skin === "new" && <textarea placeholder="請說明異常狀況（位置、類型、尺寸）" rows={2} style={{ marginTop: 8, width: "100%", border: `1px solid ${C.warn}`, borderRadius: 7, padding: "8px 10px", fontSize: 19, fontFamily: "inherit", resize: "none", boxSizing: "border-box" }} />}
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          <PillTitle icon="📝">服務概況</PillTitle>
-          {codesInSession.map((c, i) => (
-            <CodeBlock key={c.code + i} codeItem={c} extra={c.extra} fromLast={fromLastMap[c.code]}
-              chips={(phrases[`${session.client}_${c.code}`] || []).map(p => ({ t: p.text, freq: p.count, personal: true }))}
-              value={codeValues[c.code] || ""}
-              saved={savedTemplates[c.code]}
-              onChange={v => { setCodeValues(p => ({ ...p, [c.code]: v })); setSavedTemplates(p => ({ ...p, [c.code]: false })); }}
-              onSaveTemplate={() => setSavedTemplates(p => ({ ...p, [c.code]: true }))}
-              onRemove={() => removeExtra(c.code)} />
-          ))}
-          <button onClick={() => setShowAddPanel(v => !v)} style={{ background: C.accentLight, border: `1.5px dashed ${C.accent}`, borderRadius: 10, padding: "12px", fontSize: 19, fontWeight: 600, color: C.accent, cursor: "pointer" }}>＋ 新增服務項目（額外加碼）</button>
-          {showAddPanel && (
-            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: "12px", maxHeight: 240, overflowY: "auto" }}>
-              <div style={{ fontSize: 17, color: C.textSub, marginBottom: 8 }}>⚠️ 額外加碼會標記送交督導審核</div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                {ALL_CODES.filter(c => !session.codes.find(s => s.code === c.code) && !extraCodes.find(e => e.code === c.code)).map(c => (
-                  <button key={c.code} onClick={() => addExtra(c)} style={{ background: C.divider, border: `1px solid ${C.border}`, borderRadius: 6, padding: "6px 10px", fontSize: 17, color: C.text, cursor: "pointer" }}>{c.code} {cleanName(c.name)}</button>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-        {!allFilled && (
-          <div style={{ background: C.warnLight, border: `1px solid #FCD34D`, borderRadius: 8, padding: "10px 14px", fontSize: 18, color: C.warn }}>
-            ⚠️ 尚有 {codesInSession.filter(c => !codeValues[c.code]?.trim()).length} 個項目未填寫
-          </div>
-        )}
-      </div>
-      <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "white", borderTop: `1px solid ${C.border}`, padding: "12px 14px" }}>
-        <button onClick={handleSubmit} disabled={!allFilled || !canSubmitTime} style={{ width: "100%", background: (allFilled && canSubmitTime) ? C.accent : C.border, color: (allFilled && canSubmitTime) ? "white" : C.textSub, border: "none", borderRadius: 10, padding: "14px", fontSize: 21, fontWeight: 700, cursor: (allFilled && canSubmitTime) ? "pointer" : "default" }}>
-          {!canSubmitTime ? "🔒 班次結束後才能送出" : (allFilled ? "確認送出　→" : "請填寫所有項目")}
-        </button>
-      </div>
-    </div>
-  );
-
-  return (
-    <div style={{ minHeight: "100vh", background: C.bg, fontFamily: "'Noto Sans TC', sans-serif", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24 }}>
-      <div style={{ width: 72, height: 72, borderRadius: "50%", background: C.okLight, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 44, marginBottom: 20 }}>✓</div>
-      <div style={{ fontSize: 27, fontWeight: 700, color: C.text, marginBottom: 8 }}>已送出</div>
-      <div style={{ fontSize: 19, color: C.textSub, marginBottom: 4 }}>{session.client}　{session.time}</div>
-      <div style={{ fontSize: 18, color: C.textSub, marginBottom: 8 }}>{today}</div>
-      <div style={{ fontSize: 17, color: C.ok, marginBottom: 32, textAlign: "center", lineHeight: 1.5 }}>補填期（下月2日）前<br/>都可回班次清單點「已送出·可修改」修改</div>
-      <button onClick={() => setScreen("list")} style={{ background: C.primary, color: "white", border: "none", borderRadius: 10, padding: "12px 32px", fontSize: 20, fontWeight: 600, cursor: "pointer" }}>回到班次清單</button>
-    </div>
-  );
+  if (screen === "login") return /*#__PURE__*/React.createElement("div", {
+    style: {
+      minHeight: "100vh",
+      background: C.bg,
+      fontFamily: "'Noto Sans TC', sans-serif",
+      display: "flex",
+      flexDirection: "column"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1,
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: 24
+    }
+  }, /*#__PURE__*/React.createElement(YouanLogo, {
+    size: 72
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 24,
+      fontWeight: 700,
+      color: C.primary,
+      marginTop: 16,
+      marginBottom: 4,
+      textAlign: "center"
+    }
+  }, "佑安服務日誌"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 17,
+      color: C.textSub,
+      marginBottom: 28
+    }
+  }, "線上填寫系統"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: "100%",
+      maxWidth: 340,
+      display: "flex",
+      flexDirection: "column",
+      gap: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 17,
+      color: C.textSub,
+      marginBottom: 6
+    }
+  }, "員工編號"), /*#__PURE__*/React.createElement("input", {
+    value: loginId,
+    onChange: e => setLoginId(e.target.value),
+    placeholder: "例如 an016",
+    style: {
+      width: "100%",
+      border: `1.5px solid ${C.border}`,
+      borderRadius: 10,
+      padding: "13px 14px",
+      fontSize: 20,
+      fontFamily: "inherit",
+      boxSizing: "border-box",
+      outline: "none"
+    }
+  })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 17,
+      color: C.textSub,
+      marginBottom: 6
+    }
+  }, "密碼"), /*#__PURE__*/React.createElement("input", {
+    type: "password",
+    value: loginPw,
+    onChange: e => setLoginPw(e.target.value),
+    placeholder: "預設 0000",
+    onKeyDown: e => e.key === "Enter" && doLogin(),
+    style: {
+      width: "100%",
+      border: `1.5px solid ${C.border}`,
+      borderRadius: 10,
+      padding: "13px 14px",
+      fontSize: 20,
+      fontFamily: "inherit",
+      boxSizing: "border-box",
+      outline: "none"
+    }
+  })), loginErr && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: C.dangerLight,
+      border: `1px solid ${C.danger}`,
+      borderRadius: 8,
+      padding: "10px 12px",
+      fontSize: 17,
+      color: C.danger
+    }
+  }, loginErr), /*#__PURE__*/React.createElement("button", {
+    onClick: doLogin,
+    disabled: busy || !loginId.trim() || !loginPw,
+    style: {
+      width: "100%",
+      background: busy || !loginId.trim() || !loginPw ? C.border : C.primary,
+      color: busy || !loginId.trim() || !loginPw ? C.textSub : "white",
+      border: "none",
+      borderRadius: 10,
+      padding: "15px",
+      fontSize: 21,
+      fontWeight: 700,
+      cursor: busy ? "default" : "pointer",
+      marginTop: 4
+    }
+  }, busy ? "登入中…" : "登入"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 15,
+      color: C.textSub,
+      textAlign: "center",
+      marginTop: 4,
+      lineHeight: 1.6
+    }
+  }, "首次登入密碼為 0000，請登入後盡快更改"))), /*#__PURE__*/React.createElement(FooterBar, null));
+  if (screen === "list") return /*#__PURE__*/React.createElement("div", {
+    style: {
+      minHeight: "100vh",
+      background: C.bg,
+      fontFamily: "'Noto Sans TC', sans-serif"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: C.primary,
+      color: "white",
+      padding: "16px 16px 14px",
+      position: "sticky",
+      top: 0,
+      zIndex: 10
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 10,
+      marginBottom: 6
+    }
+  }, /*#__PURE__*/React.createElement(YouanLogo, {
+    size: 34,
+    color: C.bear
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 20,
+      fontWeight: 700,
+      letterSpacing: .5,
+      lineHeight: 1.3
+    }
+  }, "佑安服務日誌線上填寫系統")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 21,
+      opacity: .85,
+      marginTop: 6,
+      textAlign: "center"
+    }
+  }, today, "\u3000現在 ", NOW_STR)), /*#__PURE__*/React.createElement("div", {
+    style: {
+      margin: "12px 14px",
+      background: C.card,
+      borderRadius: 10,
+      padding: "12px 14px",
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+      border: `1px solid ${C.border}`
+    }
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 18,
+      color: C.textSub
+    }
+  }, "照服員"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 20,
+      fontWeight: 700,
+      color: C.text
+    }
+  }, user)), /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      setMe(null);
+      setScreen("login");
+      setLoginId("");
+      setLoginPw("");
+    },
+    style: {
+      background: C.divider,
+      border: `1px solid ${C.border}`,
+      borderRadius: 8,
+      padding: "6px 12px",
+      fontSize: 15,
+      color: C.textSub,
+      cursor: "pointer"
+    }
+  }, "登出")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      margin: "0 14px 12px",
+      background: C.card,
+      borderRadius: 10,
+      padding: "12px 14px",
+      border: `1px solid ${C.border}`
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 17,
+      color: C.textSub,
+      marginBottom: 8
+    }
+  }, "服務日期"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 8,
+      flexWrap: "wrap"
+    }
+  }, /*#__PURE__*/React.createElement("select", {
+    value: pickMonth,
+    onChange: e => changeDate(parseInt(e.target.value), pickDay),
+    style: {
+      fontSize: 19,
+      padding: "8px 10px",
+      borderRadius: 8,
+      border: `1px solid ${C.border}`,
+      background: "white"
+    }
+  }, [5, 6, 7].map(m => /*#__PURE__*/React.createElement("option", {
+    key: m,
+    value: m
+  }, m, "月"))), /*#__PURE__*/React.createElement("select", {
+    value: pickDay,
+    onChange: e => changeDate(pickMonth, parseInt(e.target.value)),
+    style: {
+      fontSize: 19,
+      padding: "8px 10px",
+      borderRadius: 8,
+      border: `1px solid ${C.border}`,
+      background: "white"
+    }
+  }, Array.from({
+    length: 31
+  }, (_, i) => i + 1).map(d => /*#__PURE__*/React.createElement("option", {
+    key: d,
+    value: d
+  }, d, "日"))), isToday && /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 16,
+      color: C.ok,
+      fontWeight: 600
+    }
+  }, "今天"))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "0 14px 24px",
+      display: "flex",
+      flexDirection: "column",
+      gap: 10
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between"
+    }
+  }, /*#__PURE__*/React.createElement(PillTitle, {
+    icon: "📋"
+  }, pickedDateStr, " 服務班次"), !loadingDay && /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 16,
+      color: C.textSub
+    }
+  }, dayList.length, " 班")), loadingDay && /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: "center",
+      padding: "30px 0",
+      color: C.textSub,
+      fontSize: 18
+    }
+  }, "讀取班表中…"), !loadingDay && dayList.length === 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: "center",
+      padding: "30px 0",
+      color: C.textSub,
+      fontSize: 18
+    }
+  }, "這天沒有排班"), !loadingDay && dayList.map((s, idx) => {
+    const done = submitted.includes(idx);
+    const locked = isToday && NOW_HOUR < endHourOf(s.time);
+    return /*#__PURE__*/React.createElement("div", {
+      key: idx,
+      style: {
+        background: C.card,
+        borderRadius: 12,
+        border: `1px solid ${done ? C.ok : C.border}`,
+        borderLeft: `5px solid ${done ? C.ok : locked ? C.warn : C.primary}`,
+        overflow: "hidden",
+        boxShadow: "0 1px 3px rgba(47,74,53,.08)"
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        padding: "12px 14px",
+        background: done ? C.okLight : "#FFFFFF"
+      }
+    }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 20,
+        color: C.textSub,
+        marginBottom: 3
+      }
+    }, s.time, locked && !done && /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: C.warn,
+        marginLeft: 6,
+        whiteSpace: "nowrap"
+      }
+    }, "· 尚未結束")), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 21,
+        fontWeight: 700,
+        color: C.text
+      }
+    }, s.client)), done ? /*#__PURE__*/React.createElement("button", {
+      onClick: () => handleOpen(idx),
+      style: {
+        flexShrink: 0,
+        background: C.okLight,
+        border: `1px solid ${C.ok}`,
+        borderRadius: 8,
+        padding: "6px 12px",
+        fontSize: 16,
+        fontWeight: 700,
+        cursor: "pointer",
+        whiteSpace: "nowrap"
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: C.ok
+      }
+    }, "✓ 已送出 · "), /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: C.accent
+      }
+    }, "可修改")) : /*#__PURE__*/React.createElement("button", {
+      onClick: () => handleOpen(idx),
+      style: {
+        flexShrink: 0,
+        background: locked ? C.warnLight : C.primary,
+        color: locked ? C.warn : "white",
+        border: locked ? `1px solid ${C.warn}` : "none",
+        borderRadius: 8,
+        padding: "6px 12px",
+        fontSize: 16,
+        fontWeight: 600,
+        cursor: "pointer",
+        whiteSpace: "nowrap"
+      }
+    }, locked ? "可先編輯" : "填寫")), /*#__PURE__*/React.createElement("div", {
+      style: {
+        padding: "8px 14px 10px",
+        borderTop: `1px solid ${C.divider}`,
+        background: "#FAF6EC",
+        display: "flex",
+        flexWrap: "wrap",
+        gap: 6
+      }
+    }, s.codes.map((c, i) => /*#__PURE__*/React.createElement(Tag, {
+      key: i,
+      code: c.code,
+      name: c.name
+    }))));
+  })), /*#__PURE__*/React.createElement(FooterBar, null));
+  if (screen === "fill") return /*#__PURE__*/React.createElement("div", {
+    style: {
+      minHeight: "100vh",
+      background: C.bg,
+      fontFamily: "'Noto Sans TC', sans-serif"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: C.primary,
+      color: "white",
+      padding: "14px 16px",
+      position: "sticky",
+      top: 0,
+      zIndex: 10,
+      display: "flex",
+      alignItems: "center",
+      gap: 14
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => setScreen("list"),
+    style: {
+      flexShrink: 0,
+      background: "rgba(255,255,255,.12)",
+      border: "1px solid rgba(255,255,255,.3)",
+      color: "white",
+      borderRadius: 10,
+      padding: "12px 18px",
+      fontSize: 18,
+      fontWeight: 600,
+      cursor: "pointer",
+      whiteSpace: "nowrap"
+    }
+  }, "← 返回"), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 21,
+      fontWeight: 700,
+      marginBottom: 2
+    }
+  }, session.client), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 17,
+      opacity: .85,
+      whiteSpace: "nowrap"
+    }
+  }, session.time), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 17,
+      opacity: .85,
+      whiteSpace: "nowrap"
+    }
+  }, today))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "14px 14px 100px",
+      display: "flex",
+      flexDirection: "column",
+      gap: 14
+    }
+  }, Object.keys(fromLastMap).length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: C.okLight,
+      border: `1px solid ${C.ok}`,
+      borderRadius: 8,
+      padding: "10px 14px",
+      fontSize: 18,
+      color: C.ok
+    }
+  }, "↩ 已自動帶入上次服務內容，請確認、增減或修改"), !canSubmitTime && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: C.warnLight,
+      border: `1px solid ${C.warn}`,
+      borderRadius: 8,
+      padding: "10px 14px",
+      fontSize: 18,
+      color: C.warn
+    }
+  }, "🕐 此班 ", session.time, " 尚未結束，可先編輯，須等班次結束後才能送出"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: C.card,
+      borderRadius: 12,
+      padding: "14px",
+      border: `1px solid ${C.border}`
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 12
+    }
+  }, /*#__PURE__*/React.createElement(PillTitle, {
+    icon: "🩺"
+  }, "身體或皮膚狀況")), /*#__PURE__*/React.createElement(SkinStatus, {
+    value: skin,
+    onChange: setSkin
+  }), skin === "new" && /*#__PURE__*/React.createElement("textarea", {
+    placeholder: "請說明異常狀況（位置、類型、尺寸）",
+    rows: 2,
+    style: {
+      marginTop: 8,
+      width: "100%",
+      border: `1px solid ${C.warn}`,
+      borderRadius: 7,
+      padding: "8px 10px",
+      fontSize: 19,
+      fontFamily: "inherit",
+      resize: "none",
+      boxSizing: "border-box"
+    }
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 10
+    }
+  }, /*#__PURE__*/React.createElement(PillTitle, {
+    icon: "📝"
+  }, "服務概況"), codesInSession.map((c, i) => /*#__PURE__*/React.createElement(CodeBlock, {
+    key: c.code + i,
+    codeItem: c,
+    extra: c.extra,
+    fromLast: fromLastMap[c.code],
+    chips: (phrases[`${session.client}_${c.code}`] || []).map(p => ({
+      t: p.text,
+      freq: p.count,
+      personal: true
+    })),
+    value: codeValues[c.code] || "",
+    saved: savedTemplates[c.code],
+    onChange: v => {
+      setCodeValues(p => ({
+        ...p,
+        [c.code]: v
+      }));
+      setSavedTemplates(p => ({
+        ...p,
+        [c.code]: false
+      }));
+    },
+    onSaveTemplate: () => setSavedTemplates(p => ({
+      ...p,
+      [c.code]: true
+    })),
+    onRemove: () => removeExtra(c.code)
+  })), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setShowAddPanel(v => !v),
+    style: {
+      background: C.accentLight,
+      border: `1.5px dashed ${C.accent}`,
+      borderRadius: 10,
+      padding: "12px",
+      fontSize: 19,
+      fontWeight: 600,
+      color: C.accent,
+      cursor: "pointer"
+    }
+  }, "＋ 新增服務項目（額外加碼）"), showAddPanel && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: C.card,
+      border: `1px solid ${C.border}`,
+      borderRadius: 10,
+      padding: "12px",
+      maxHeight: 240,
+      overflowY: "auto"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 17,
+      color: C.textSub,
+      marginBottom: 8
+    }
+  }, "⚠️ 額外加碼會標記送交督導審核"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexWrap: "wrap",
+      gap: 6
+    }
+  }, ALL_CODES.filter(c => !session.codes.find(s => s.code === c.code) && !extraCodes.find(e => e.code === c.code)).map(c => /*#__PURE__*/React.createElement("button", {
+    key: c.code,
+    onClick: () => addExtra(c),
+    style: {
+      background: C.divider,
+      border: `1px solid ${C.border}`,
+      borderRadius: 6,
+      padding: "6px 10px",
+      fontSize: 17,
+      color: C.text,
+      cursor: "pointer"
+    }
+  }, c.code, " ", cleanName(c.name)))))), !allFilled && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: C.warnLight,
+      border: `1px solid #FCD34D`,
+      borderRadius: 8,
+      padding: "10px 14px",
+      fontSize: 18,
+      color: C.warn
+    }
+  }, "⚠️ 尚有 ", codesInSession.filter(c => !codeValues[c.code]?.trim()).length, " 個項目未填寫")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "fixed",
+      bottom: 0,
+      left: 0,
+      right: 0,
+      background: "white",
+      borderTop: `1px solid ${C.border}`,
+      padding: "12px 14px"
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: handleSubmit,
+    disabled: !allFilled || !canSubmitTime,
+    style: {
+      width: "100%",
+      background: allFilled && canSubmitTime ? C.accent : C.border,
+      color: allFilled && canSubmitTime ? "white" : C.textSub,
+      border: "none",
+      borderRadius: 10,
+      padding: "14px",
+      fontSize: 21,
+      fontWeight: 700,
+      cursor: allFilled && canSubmitTime ? "pointer" : "default"
+    }
+  }, !canSubmitTime ? "🔒 班次結束後才能送出" : allFilled ? "確認送出　→" : "請填寫所有項目")));
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      minHeight: "100vh",
+      background: C.bg,
+      fontFamily: "'Noto Sans TC', sans-serif",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: 24
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 72,
+      height: 72,
+      borderRadius: "50%",
+      background: C.okLight,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      fontSize: 44,
+      marginBottom: 20
+    }
+  }, "✓"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 27,
+      fontWeight: 700,
+      color: C.text,
+      marginBottom: 8
+    }
+  }, "已送出"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 19,
+      color: C.textSub,
+      marginBottom: 4
+    }
+  }, session.client, "\u3000", session.time), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 18,
+      color: C.textSub,
+      marginBottom: 8
+    }
+  }, today), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 17,
+      color: C.ok,
+      marginBottom: 32,
+      textAlign: "center",
+      lineHeight: 1.5
+    }
+  }, "補填期（下月2日）前", /*#__PURE__*/React.createElement("br", null), "都可回班次清單點「已送出·可修改」修改"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setScreen("list"),
+    style: {
+      background: C.primary,
+      color: "white",
+      border: "none",
+      borderRadius: 10,
+      padding: "12px 32px",
+      fontSize: 20,
+      fontWeight: 600,
+      cursor: "pointer"
+    }
+  }, "回到班次清單"));
 }
-
-
 const root = ReactDOM.createRoot(document.getElementById("root"));
-root.render(<App />);
+root.render(React.createElement(App));
 </script>
 </body>
 </html>
