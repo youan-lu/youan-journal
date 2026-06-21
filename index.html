@@ -12,6 +12,7 @@
   input, select, textarea, button { font-family: 'Noto Sans TC', sans-serif; }
   #loading { text-align:center; padding:80px 20px; color:#6E6A5F; font-size:18px; }
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
 <div id="root"><div id="loading">載入中…</div></div>
@@ -1266,19 +1267,57 @@ function App() {
       setUploading(true);
       setUploadMsg("讀取檔案中…");
       try {
-        const b64 = await new Promise((res, rej) => {
-          const reader = new FileReader();
-          reader.onload = () => res(reader.result.split(",")[1]);
-          reader.onerror = () => rej(new Error("讀取失敗"));
-          reader.readAsDataURL(file);
+        const ab = await file.arrayBuffer();
+        setUploadMsg("解析班表中…");
+        const wb = XLSX.read(ab, {type: "array"});
+        const allRows = [];
+        wb.SheetNames.forEach(name => {
+          const ws = wb.Sheets[name];
+          const data = XLSX.utils.sheet_to_json(ws, {header:1, defval:""});
+          if (data.length < 5) return;
+          const row2 = String(data[1][0] || "");
+          const empMatch = row2.match(/員工編號\s*(\S+)/);
+          if (!empMatch) return;
+          const eId = empMatch[1];
+          const eName = name;
+          const ymMatch = row2.match(/(\d{3})年(\d{1,2})月/);
+          const year = ymMatch ? parseInt(ymMatch[1]) : 0;
+          const month = ymMatch ? parseInt(ymMatch[2]) : 0;
+          for (let r = 0; r < data.length - 1; r++) {
+            const row = data[r];
+            const dateCells = row.map(c => {
+              if (!c) return null;
+              const m = String(c).match(/^\s*(\d{1,2})/);
+              return m ? parseInt(m[1]) : null;
+            });
+            if (dateCells.filter(d => d && d >= 1 && d <= 31).length < 3) continue;
+            const svcRow = data[r + 1];
+            for (let col = 0; col < dateCells.length; col++) {
+              const day = dateCells[col];
+              if (!day || col >= svcRow.length) continue;
+              const cell = String(svcRow[col] || "");
+              if (!cell || cell === ".") continue;
+              const pat = /(\d{1,2}:\d{2})~(\d{1,2}:\d{2})\s+([\u4e00-\u9fff]+)\s*\n?\[([^\]]+)\]\s*\n?((?:(?:BA|GA)\w+[^\n,]*×\d+[,\s]*)+)/g;
+              let mt, seq = 1;
+              while ((mt = pat.exec(cell)) !== null) {
+                const baItems = (mt[5].match(/((?:BA|GA)\d+)[^×]*×(\d+)/g) || []).map(item => {
+                  const m2 = item.match(/((?:BA|GA)\d+)[^×]*×(\d+)/);
+                  return m2 ? m2[1] + m2[0].replace(m2[1],"") : item;
+                });
+                allRows.push([year, month, day, eId, eName, seq, mt[1]+"~"+mt[2], mt[3], mt[4], baItems.join(", ")]);
+                seq++;
+              }
+            }
+          }
         });
-        setUploadMsg("上傳拆解中…（約需 30 秒）");
+        if (allRows.length === 0) { setUploadMsg("❌ 解析結果為空，請確認是仁寶排班表"); setUploading(false); e.target.value=""; return; }
+        setUploadMsg("解析完成 " + allRows.length + " 筆，上傳中…");
         const resp = await fetch(API, {
           method: "POST",
-          body: JSON.stringify({ action: "uploadSchedule", empId: me.empId, role: me.role, fileData: b64 }),
+          body: JSON.stringify({ action: "uploadSchedule", empId: me.empId, role: me.role, rows: JSON.stringify(allRows) }),
         });
         const r = await resp.json();
-        setUploadMsg(r.ok ? `✅ ${r.msg}（${r.count} 筆）` : `❌ ${r.msg}`);
+        setUploadMsg(r.ok ? "✅ " + r.msg + "（" + r.count + " 筆）" : "❌ " + r.msg);
         if (r.ok) loadDay(me.empId, pickMonth, pickDay);
       } catch (err) {
         setUploadMsg("❌ 上傳失敗：" + err.message);
