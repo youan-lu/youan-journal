@@ -886,6 +886,9 @@ function App() {
     setShowAddPanel(false);
     setScreen("fill");
   };
+  // 是否選的是「今天」（只有今天才需要時間鎖定）
+  const isToday = pickMonth === _now.getMonth() + 1 && pickDay === _now.getDate();
+
   // BUG1修正：即時取當下時間
   // BUG2修正：過去日期直接放行
   const canSubmitNow = () => {
@@ -972,8 +975,6 @@ function App() {
     });
   };
 
-  // 是否選的是「今天」（只有今天才需要時間鎖定）
-  const isToday = pickMonth === _now.getMonth() + 1 && pickDay === _now.getDate();
   const pickedDateStr = `${pickMonth}月${pickDay}日`;
 
   // ── 登入畫面 ──
