@@ -49,7 +49,6 @@ c.useState=function(a){return g.current.useState(a)};c.useSyncExternalStore=func
 })();
 
 </script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
 /**
  * @license React
@@ -323,7 +322,7 @@ function(a,b,c){if(!Vd(b))throw Error(m(200));return Wd(null,a,b,!1,c)};Q.unmoun
 <script>
 const { useState, useEffect } = React;
 // ★ 後端網址（Apps Script Web App）
-const API = "https://script.google.com/macros/s/AKfycbwWFkV5S4FzJfnUvC0BQXPfE9mYkipLYQZYM5pRI81AXEDvC9d_rI4xXm7tcTG9vyOoZg/exec";
+const API = "https://script.google.com/macros/s/AKfycby7-NrvmDYBgfM-juX2g44wkJrwE90qPsV-IlrrjWB6t9gL9T96Pwa3S1tZPbzGNrSTcw/exec";
 
 // 呼叫後端的小工具
 async function callAPI(action, params = {}) {
@@ -543,6 +542,7 @@ const SkinStatus = ({
     }
   }, opts.map(o => /*#__PURE__*/React.createElement("label", {
     key: o.v,
+    onClick: () => onChange(o.v),
     style: {
       display: "flex",
       alignItems: "center",
@@ -551,7 +551,8 @@ const SkinStatus = ({
       border: `1.5px solid ${value === o.v ? C.ok : "transparent"}`,
       borderRadius: 8,
       padding: "10px 12px",
-      cursor: "pointer"
+      cursor: "pointer",
+      userSelect: "none"
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -659,13 +660,22 @@ const CodeBlock = ({
       cursor: "pointer",
       fontWeight: 600
     }
-  }, "移除") : value && /*#__PURE__*/React.createElement("span", {
+  }, "移除") : /*#__PURE__*/React.createElement("button", {
+    onClick: onSaveTemplate,
+    disabled: saved,
     style: {
-      fontSize: 16,
-      color: C.ok,
-      fontWeight: 600
+      background: saved ? C.okLight : "none",
+      border: saved ? `1px solid ${C.ok}` : "none",
+      borderRadius: 8,
+      padding: saved ? "3px 8px" : "3px 4px",
+      fontSize: 15,
+      fontWeight: 600,
+      color: saved ? C.ok : C.textSub,
+      cursor: saved ? "default" : "pointer",
+      whiteSpace: "nowrap",
+      flexShrink: 0
     }
-  }, "✓")), /*#__PURE__*/React.createElement("div", {
+  }, saved ? "✓ 已加入" : "⭐ 加入常用")), /*#__PURE__*/React.createElement("div", {
     style: {
       padding: "10px 14px",
       display: "flex",
@@ -718,22 +728,7 @@ const CodeBlock = ({
       cursor: "pointer",
       padding: 0
     }
-  }, "清空")), value && /*#__PURE__*/React.createElement("button", {
-    onClick: onSaveTemplate,
-    disabled: saved,
-    style: {
-      alignSelf: "flex-start",
-      marginTop: 2,
-      background: saved ? C.okLight : C.accentLight,
-      color: saved ? C.ok : C.accent,
-      border: `1.5px solid ${saved ? C.ok : C.accent}`,
-      borderRadius: 10,
-      padding: "8px 14px",
-      fontSize: 18,
-      fontWeight: 700,
-      cursor: saved ? "default" : "pointer"
-    }
-  }, saved ? "✓ 已加入常用" : "⭐ 加入常用資料庫"), showChips && /*#__PURE__*/React.createElement("div", {
+  }, "清空")),  showChips && /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       flexDirection: "column",
@@ -891,9 +886,18 @@ function App() {
     setShowAddPanel(false);
     setScreen("fill");
   };
-  const canSubmitTime = session && NOW_HOUR >= endHourOf(session.time);
+  // BUG1修正：即時取當下時間
+  // BUG2修正：過去日期直接放行
+  const canSubmitNow = () => {
+    if (!session) return false;
+    if (!isToday) return true;
+    const now2 = new Date();
+    const nowH = now2.getHours() + now2.getMinutes() / 60;
+    return nowH >= endHourOf(session.time);
+  };
+  const canSubmitTime = canSubmitNow();
   const handleSubmit = async () => {
-    if (!canSubmitTime || busy) return;
+    if (!canSubmitNow() || busy) return;
     setBusy(true);
     // 組成送出資料：每個BA碼一筆
     const records = codesInSession.map(c => ({
@@ -1246,54 +1250,16 @@ function App() {
       setUploading(true);
       setUploadMsg("讀取檔案中…");
       try {
-        const ab = await file.arrayBuffer();
-        setUploadMsg("解析班表中…");
-        const wb = XLSX.read(ab, {type: "array"});
-        const allRows = [];
-        wb.SheetNames.forEach(name => {
-          const ws = wb.Sheets[name];
-          const data = XLSX.utils.sheet_to_json(ws, {header:1, defval:""});
-          if (data.length < 5) return;
-          const row2 = String(data[1][0] || "");
-          const empMatch = row2.match(/員工編號\s*(\S+)/);
-          if (!empMatch) return;
-          const eId = empMatch[1];
-          const eName = name;
-          const ymMatch = row2.match(/(\d{3})年(\d{1,2})月/);
-          const year = ymMatch ? parseInt(ymMatch[1]) : 0;
-          const month = ymMatch ? parseInt(ymMatch[2]) : 0;
-          for (let r = 0; r < data.length - 1; r++) {
-            const row = data[r];
-            const dateCells = row.map(c => {
-              if (!c) return null;
-              const m = String(c).match(/^\s*(\d{1,2})\s*$/);
-              return m ? parseInt(m[1]) : null;
-            });
-            if (dateCells.filter(d => d && d >= 1 && d <= 31).length < 3) continue;
-            const svcRow = data[r + 1];
-            for (let col = 0; col < dateCells.length; col++) {
-              const day = dateCells[col];
-              if (!day || col >= svcRow.length) continue;
-              const cell = String(svcRow[col] || "");
-              if (!cell || cell === ".") continue;
-              const pat = /(\d{1,2}:\d{2})~(\d{1,2}:\d{2})\s+([\u4e00-\u9fff]+)\s*\n?\[([^\]]+)\]\s*\n?((?:(?:BA|GA)\w+[^\n,]*×\d+[,\s]*)+)/g;
-              let mt, seq = 1;
-              while ((mt = pat.exec(cell)) !== null) {
-                const baItems = (mt[5].match(/((?:BA|GA)\d+)[^×]*×(\d+)/g) || []).map(item => {
-                  const m2 = item.match(/((?:BA|GA)\d+)[^×]*×(\d+)/);
-                  return m2 ? m2[1] + m2[0].replace(m2[1],"") : item;
-                });
-                allRows.push([year, month, day, eId, eName, seq, mt[1]+"~"+mt[2], mt[3], mt[4], baItems.join(", ")]);
-                seq++;
-              }
-            }
-          }
+        const b64 = await new Promise((res, rej) => {
+          const reader = new FileReader();
+          reader.onload = () => res(reader.result.split(",")[1]);
+          reader.onerror = () => rej(new Error("讀取失敗"));
+          reader.readAsDataURL(file);
         });
-        if (allRows.length === 0) { setUploadMsg("❌ 解析結果為空，請確認是仁寶排班表"); setUploading(false); e.target.value=""; return; }
-        setUploadMsg(`解析完成 ${allRows.length} 筆，上傳中…`);
+        setUploadMsg("上傳拆解中…（約需 30 秒）");
         const resp = await fetch(API, {
           method: "POST",
-          body: JSON.stringify({ action: "uploadSchedule", empId: me.empId, role: me.role, rows: JSON.stringify(allRows) }),
+          body: JSON.stringify({ action: "uploadSchedule", empId: me.empId, role: me.role, fileData: b64 }),
         });
         const r = await resp.json();
         setUploadMsg(r.ok ? `✅ ${r.msg}（${r.count} 筆）` : `❌ ${r.msg}`);
@@ -1520,20 +1486,25 @@ function App() {
     }
   }, "← 返回"), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     style: {
-      fontSize: 21,
+      fontSize: 20,
       fontWeight: 700,
-      marginBottom: 2
+      marginBottom: 2,
+      display: "flex",
+      alignItems: "baseline",
+      gap: 8,
+      flexWrap: "wrap"
     }
-  }, session.client), /*#__PURE__*/React.createElement("div", {
+  }, session.client, /*#__PURE__*/React.createElement("span", {
     style: {
-      fontSize: 17,
+      fontSize: 15,
+      fontWeight: 400,
       opacity: .85,
       whiteSpace: "nowrap"
     }
-  }, session.time), /*#__PURE__*/React.createElement("div", {
+  }, session.time)), /*#__PURE__*/React.createElement("div", {
     style: {
-      fontSize: 17,
-      opacity: .85,
+      fontSize: 15,
+      opacity: .75,
       whiteSpace: "nowrap"
     }
   }, today))), /*#__PURE__*/React.createElement("div", {
@@ -1552,7 +1523,7 @@ function App() {
       fontSize: 18,
       color: C.ok
     }
-  }, "↩ 已自動帶入上次服務內容，請確認、增減或修改"), !canSubmitTime && /*#__PURE__*/React.createElement("div", {
+  }, "↩ 已自動帶入上次服務內容，請確認、增減或修改"), !canSubmitNow() && /*#__PURE__*/React.createElement("div", {
     style: {
       background: C.warnLight,
       border: `1px solid ${C.warn}`,
@@ -1702,19 +1673,19 @@ function App() {
     }
   }, /*#__PURE__*/React.createElement("button", {
     onClick: handleSubmit,
-    disabled: !allFilled || !canSubmitTime,
+    disabled: !allFilled || !canSubmitNow(),
     style: {
       width: "100%",
-      background: allFilled && canSubmitTime ? C.accent : C.border,
-      color: allFilled && canSubmitTime ? "white" : C.textSub,
+      background: allFilled && canSubmitNow() ? C.accent : C.border,
+      color: allFilled && canSubmitNow() ? "white" : C.textSub,
       border: "none",
       borderRadius: 10,
       padding: "14px",
       fontSize: 21,
       fontWeight: 700,
-      cursor: allFilled && canSubmitTime ? "pointer" : "default"
+      cursor: allFilled && canSubmitNow() ? "pointer" : "default"
     }
-  }, !canSubmitTime ? "🔒 班次結束後才能送出" : allFilled ? "確認送出　→" : "請填寫所有項目")));
+  }, !canSubmitNow() ? "🔒 班次結束後才能送出" : allFilled ? "確認送出　→" : "請填寫所有項目")));
   return /*#__PURE__*/React.createElement("div", {
     style: {
       minHeight: "100vh",
