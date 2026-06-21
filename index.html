@@ -457,7 +457,9 @@ const SignaturePad = ({onSave,empId,empName}) => {
     small.width=300; small.height=100;
     small.getContext("2d").drawImage(src,0,0,300,100);
     const dataUrl=small.toDataURL("image/png");
-    try{await callAPI("saveSignature",{empId,signature:dataUrl});}catch(e){console.error(e);}
+    try{
+      await fetch(API,{method:"POST",body:JSON.stringify({action:"saveSignature",empId,signature:dataUrl})});
+    }catch(e){console.error(e);}
     onSave(dataUrl);
     setSaving(false);
   };
