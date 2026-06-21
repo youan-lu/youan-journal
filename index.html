@@ -574,10 +574,10 @@ function App() {
     const records=codesInSession.map(c=>({code:c.code,summary:codeValues[c.code]||"",extra:!!c.extra}));
     const payload={empId:me.empId,empName:me.name,serviceDate:`${_now.getFullYear()-1911}/${pickMonth}/${pickDay}`,client:session.client,time:session.time,bantype:session.bantype,skin,records,signature};
     try{
-      await callAPI("submit",{data:JSON.stringify(payload)});
+      await fetch(API,{method:"POST",body:JSON.stringify({action:"submit",data:JSON.stringify(payload)})});
       for(const c of codesInSession){
         if(savedTemplates[c.code]&&codeValues[c.code]){
-          await callAPI("savePhrase",{empId:me.empId,empName:me.name,client:session.client,code:c.code,phrase:codeValues[c.code]});
+          await fetch(API,{method:"POST",body:JSON.stringify({action:"savePhrase",empId:me.empId,empName:me.name,client:session.client,code:c.code,phrase:codeValues[c.code]})});
         }
       }
       setSavedData(p=>({...p,[activeIdx]:{codeValues:{...codeValues},skin,extraCodes:[...extraCodes]}}));
