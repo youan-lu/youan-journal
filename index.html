@@ -492,6 +492,8 @@ function App() {
   const [fromLastMap,setFromLastMap] = useState({});
   const [extraCodes,setExtraCodes] = useState([]);
   const [showAddPanel,setShowAddPanel] = useState(false);
+  const [abnormalMap,setAbnormalMap] = useState({});
+  const [reportingAbn,setReportingAbn] = useState(false);
   const [savedTemplates,setSavedTemplates] = useState({});
   const [submitted,setSubmitted] = useState([]);
   const [savedData,setSavedData] = useState({});
@@ -568,6 +570,23 @@ function App() {
   const codesInSession=session?[...session.codes.map(c=>({...c,extra:false})),...extraCodes.map(c=>({...c,extra:true}))]:[];
   const allFilled=codesInSession.length>0&&codesInSession.every(c=>codeValues[c.code]?.trim());
 
+  const reportAbnormal=async()=>{
+    if(reportingAbn)return;
+    if(!confirm(`確定要將「${session.client}」今天此班次標記為「班表異常」並通知督導嗎？\n標記後此班次將無法送出，須等督導更新班表。`))return;
+    setReportingAbn(true);
+    try{
+      await fetch(API,{method:"POST",body:JSON.stringify({
+        action:"reportAbnormal",
+        empId:me.empId,empName:me.name,
+        serviceDate:`${_now.getFullYear()-1911}/${pickMonth}/${pickDay}`,
+        client:session.client,time:session.time,bantype:session.bantype
+      })});
+      setAbnormalMap(p=>({...p,[activeIdx]:true}));
+      alert("已通報班表異常，督導會收到通知。");
+      setScreen("list");
+    }catch(e){alert("通報失敗，請檢查網路後再試一次");}
+    setReportingAbn(false);
+  };
   const handleSubmit=async()=>{
     if(!allFilled||!canSubmitNow()||busy)return;
     setBusy(true);
@@ -724,7 +743,8 @@ function App() {
       React.createElement("div",null,
         React.createElement("div",{style:{display:"flex",alignItems:"baseline",gap:10,marginBottom:2,flexWrap:"wrap"}},
           React.createElement("span",{style:{fontSize:21,fontWeight:700}},session.client),
-          React.createElement("span",{style:{fontSize:17,opacity:.85,whiteSpace:"nowrap"}},session.time)),
+          React.createElement("span",{style:{fontSize:17,opacity:.85,whiteSpace:"nowrap"}},session.time),
+          React.createElement("button",{onClick:reportAbnormal,disabled:reportingAbn||abnormalMap[activeIdx],style:{background:abnormalMap[activeIdx]?"rgba(255,255,255,.2)":C.accent,border:"none",color:"white",borderRadius:8,padding:"4px 10px",fontSize:14,fontWeight:700,cursor:abnormalMap[activeIdx]?"default":"pointer",whiteSpace:"nowrap"}},abnormalMap[activeIdx]?"⚠️ 已通報異常":"⚠️ 異常通報")),
         React.createElement("div",{style:{fontSize:17,opacity:.85,whiteSpace:"nowrap"}},today))),
     React.createElement("div",{style:{padding:"14px 14px 100px",display:"flex",flexDirection:"column",gap:14}},
       Object.keys(fromLastMap).length>0&&React.createElement("div",{style:{background:C.okLight,border:`1px solid ${C.ok}`,borderRadius:8,padding:"10px 14px",fontSize:18,color:C.ok}},"↩ 已自動帶入上次服務內容，請確認、增減或修改"),
@@ -736,13 +756,9 @@ function App() {
       React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:10}},
         React.createElement(PillTitle,{icon:"📝"},"服務概況"),
         codesInSession.map((c,i)=>React.createElement(CodeBlock,{key:c.code+i,codeItem:c,extra:c.extra,fromLast:fromLastMap[c.code],chips:(()=>{const exact=phrases[`${session.client}_${c.code}`]||[];const all=byCode[c.code]||[];const seen=new Set(exact.map(p=>p.text));return[...exact.map(p=>({t:p.text,freq:p.count,personal:true})),...all.filter(p=>!seen.has(p.text)).map(p=>({t:p.text,freq:p.count,personal:false}))];})(),value:codeValues[c.code]||"",saved:savedTemplates[c.code],onChange:v=>{setCodeValues(p=>({...p,[c.code]:v}));setSavedTemplates(p=>({...p,[c.code]:false}));},onSaveTemplate:()=>setSavedTemplates(p=>({...p,[c.code]:true})),onRemove:()=>removeExtra(c.code)})),
-        React.createElement("button",{onClick:()=>setShowAddPanel(v=>!v),style:{background:C.accentLight,border:`1.5px dashed ${C.accent}`,borderRadius:10,padding:"12px",fontSize:19,fontWeight:600,color:C.accent,cursor:"pointer"}},"＋ 新增服務項目（額外加碼）"),
-        showAddPanel&&React.createElement("div",{style:{background:C.card,border:`1px solid ${C.border}`,borderRadius:10,padding:"12px",maxHeight:240,overflowY:"auto"}},
-          React.createElement("div",{style:{fontSize:17,color:C.textSub,marginBottom:8}},"⚠️ 額外加碼會標記送交督導審核"),
-          React.createElement("div",{style:{display:"flex",flexWrap:"wrap",gap:6}},ALL_CODES.filter(c=>!session.codes.find(s=>s.code===c.code)&&!extraCodes.find(e=>e.code===c.code)).map(c=>React.createElement("button",{key:c.code,onClick:()=>addExtra(c),style:{background:C.divider,border:`1px solid ${C.border}`,borderRadius:6,padding:"6px 10px",fontSize:17,color:C.text,cursor:"pointer"}},c.code," ",cleanName(c.name)))))),
-      !allFilled&&React.createElement("div",{style:{background:C.warnLight,border:`1px solid #FCD34D`,borderRadius:8,padding:"10px 14px",fontSize:18,color:C.warn}},"⚠️ 尚有 ",codesInSession.filter(c=>!codeValues[c.code]?.trim()).length," 個項目未填寫")),
+        !allFilled&&React.createElement("div",{style:{background:C.warnLight,border:`1px solid #FCD34D`,borderRadius:8,padding:"10px 14px",fontSize:18,color:C.warn}},"⚠️ 尚有 ",codesInSession.filter(c=>!codeValues[c.code]?.trim()).length," 個項目未填寫")),
     React.createElement("div",{style:{position:"fixed",bottom:0,left:0,right:0,background:"white",borderTop:`1px solid ${C.border}`,padding:"12px 14px"}},
-      React.createElement("button",{onClick:handleSubmit,disabled:!allFilled||!canSubmitNow(),style:{width:"100%",background:allFilled&&canSubmitNow()?C.accent:C.border,color:allFilled&&canSubmitNow()?"white":C.textSub,border:"none",borderRadius:10,padding:"14px",fontSize:21,fontWeight:700,cursor:allFilled&&canSubmitNow()?"pointer":"default"}},!canSubmitNow()?"🔒 班次結束後才能送出":allFilled?"確認送出　→":"請填寫所有項目")));
+      React.createElement("button",{onClick:handleSubmit,disabled:!allFilled||!canSubmitNow()||abnormalMap[activeIdx],style:{width:"100%",background:abnormalMap[activeIdx]?C.border:(allFilled&&canSubmitNow()?C.accent:C.border),color:abnormalMap[activeIdx]?C.textSub:(allFilled&&canSubmitNow()?"white":C.textSub),border:"none",borderRadius:10,padding:"14px",fontSize:21,fontWeight:700,cursor:allFilled&&canSubmitNow()&&!abnormalMap[activeIdx]?"pointer":"default"}},abnormalMap[activeIdx]?"⚠️ 已通報異常，等待督導更新班表":!canSubmitNow()?"🔒 班次結束後才能送出":allFilled?"確認送出　→":"請填寫所有項目"))));
 
   // ── 送出完成 ──
   return React.createElement("div",{style:{minHeight:"100vh",background:C.bg,fontFamily:"'Noto Sans TC', sans-serif",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24}},
