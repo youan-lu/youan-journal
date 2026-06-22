@@ -939,21 +939,11 @@ function App() {
       records
     };
     try {
+      // 主資料送出（這步成功就算送出成功）
       await callAPI("submit", {
         data: JSON.stringify(payload)
       });
-      // 同時把「設為慣用語」的句子存回後端
-      for (const c of codesInSession) {
-        if (savedTemplates[c.code] && codeValues[c.code]) {
-          await callAPI("savePhrase", {
-            empId: me.empId,
-            empName: me.name,
-            client: session.client,
-            code: c.code,
-            phrase: codeValues[c.code]
-          });
-        }
-      }
+      // ↓ 主資料已成功。以下慣用語儲存即使失敗，也不影響「已送出」結果
       setSavedData(p => ({
         ...p,
         [activeIdx]: {
@@ -967,8 +957,24 @@ function App() {
       }));
       setSubmitted(prev => prev.includes(activeIdx) ? prev : [...prev, activeIdx]);
       setScreen("done");
+      // 慣用語儲存（背景進行，失敗不影響送出成功）
+      try {
+        for (const c of codesInSession) {
+          if (savedTemplates[c.code] && codeValues[c.code]) {
+            await callAPI("savePhrase", {
+              empId: me.empId,
+              empName: me.name,
+              client: session.client,
+              code: c.code,
+              phrase: codeValues[c.code]
+            });
+          }
+        }
+      } catch (e2) {
+        /* 慣用語儲存失敗可忽略，主資料已送出 */
+      }
     } catch (e) {
-      alert("送出失敗，請檢查網路後再試一次");
+      alert("⚠️ 送出失敗\n\n資料尚未送出，請檢查網路後再按一次「確認送出」。\n（若重複出現，可截圖回報）");
     }
     setBusy(false);
   };
@@ -1735,19 +1741,19 @@ function App() {
     }
   }, /*#__PURE__*/React.createElement("button", {
     onClick: handleSubmit,
-    disabled: !allFilled || !canSubmitNow(),
+    disabled: !allFilled || !canSubmitNow() || busy,
     style: {
       width: "100%",
-      background: allFilled && canSubmitNow() ? C.accent : C.border,
-      color: allFilled && canSubmitNow() ? "white" : C.textSub,
+      background: busy ? C.textSub : (allFilled && canSubmitNow() ? C.accent : C.border),
+      color: (allFilled && canSubmitNow()) || busy ? "white" : C.textSub,
       border: "none",
       borderRadius: 10,
       padding: "14px",
       fontSize: 21,
       fontWeight: 700,
-      cursor: allFilled && canSubmitNow() ? "pointer" : "default"
+      cursor: busy ? "wait" : (allFilled && canSubmitNow() ? "pointer" : "default")
     }
-  }, !canSubmitNow() ? "🔒 班次結束後才能送出" : allFilled ? "確認送出　→" : "請填寫所有項目")));
+  }, busy ? "⏳ 送出中…請稍候，勿關閉" : (!canSubmitNow() ? "🔒 班次結束後才能送出" : allFilled ? "確認送出　→" : "請填寫所有項目"))));
   return /*#__PURE__*/React.createElement("div", {
     style: {
       minHeight: "100vh",
