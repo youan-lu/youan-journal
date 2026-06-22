@@ -570,28 +570,20 @@ function App() {
   const codesInSession=session?[...session.codes.map(c=>({...c,extra:false})),...extraCodes.map(c=>({...c,extra:true}))]:[];
   const allFilled=codesInSession.length>0&&codesInSession.every(c=>codeValues[c.code]?.trim());
 
-  const reportAbnormal=async()=>{
-    if(reportingAbn)return;
-    if(!confirm(`確定要將「${session.client}」今天此班次標記為「班表異常」並通知督導嗎？\n標記後此班次將無法送出，須等督導更新班表。`))return;
-    setReportingAbn(true);
-    try{
-      await fetch(API,{method:"POST",body:JSON.stringify({
-        action:"reportAbnormal",
-        empId:me.empId,empName:me.name,
-        serviceDate:`${_now.getFullYear()-1911}/${pickMonth}/${pickDay}`,
-        client:session.client,time:session.time,bantype:session.bantype
-      })});
+  const reportAbnormal=()=>{
+    if(abnormalMap[activeIdx]){
+      setAbnormalMap(p=>({...p,[activeIdx]:false}));
+    }else{
+      if(!confirm(`確定要將「${session.client}」此班次標記為「異常」嗎？\n標記後可自由填寫實際服務內容，照常送出，月底訂正時會列出。`))return;
       setAbnormalMap(p=>({...p,[activeIdx]:true}));
-      alert("已通報班表異常，督導會收到通知。");
-      setScreen("list");
-    }catch(e){alert("通報失敗，請檢查網路後再試一次");}
-    setReportingAbn(false);
+    }
   };
   const handleSubmit=async()=>{
-    if(!allFilled||!canSubmitNow()||busy)return;
+    const isAbn=!!abnormalMap[activeIdx];
+    if(!allFilled||(!canSubmitNow()&&!isAbn)||busy)return;
     setBusy(true);
     const records=codesInSession.map(c=>({code:c.code,summary:codeValues[c.code]||"",extra:!!c.extra}));
-    const payload={empId:me.empId,empName:me.name,serviceDate:`${_now.getFullYear()-1911}/${pickMonth}/${pickDay}`,client:session.client,time:session.time,bantype:session.bantype,skin,records,signature};
+    const payload={empId:me.empId,empName:me.name,serviceDate:`${_now.getFullYear()-1911}/${pickMonth}/${pickDay}`,client:session.client,time:session.time,bantype:session.bantype,skin,records,signature,abnormal:isAbn};
     try{
       await fetch(API,{method:"POST",body:JSON.stringify({action:"submit",data:JSON.stringify(payload)})});
       for(const c of codesInSession){
@@ -758,7 +750,7 @@ function App() {
         codesInSession.map((c,i)=>React.createElement(CodeBlock,{key:c.code+i,codeItem:c,extra:c.extra,fromLast:fromLastMap[c.code],chips:(()=>{const exact=phrases[`${session.client}_${c.code}`]||[];const all=byCode[c.code]||[];const seen=new Set(exact.map(p=>p.text));return[...exact.map(p=>({t:p.text,freq:p.count,personal:true})),...all.filter(p=>!seen.has(p.text)).map(p=>({t:p.text,freq:p.count,personal:false}))];})(),value:codeValues[c.code]||"",saved:savedTemplates[c.code],onChange:v=>{setCodeValues(p=>({...p,[c.code]:v}));setSavedTemplates(p=>({...p,[c.code]:false}));},onSaveTemplate:()=>setSavedTemplates(p=>({...p,[c.code]:true})),onRemove:()=>removeExtra(c.code)})),
         !allFilled&&React.createElement("div",{style:{background:C.warnLight,border:`1px solid #FCD34D`,borderRadius:8,padding:"10px 14px",fontSize:18,color:C.warn}},"⚠️ 尚有 ",codesInSession.filter(c=>!codeValues[c.code]?.trim()).length," 個項目未填寫")),
     React.createElement("div",{style:{position:"fixed",bottom:0,left:0,right:0,background:"white",borderTop:`1px solid ${C.border}`,padding:"12px 14px"}},
-      React.createElement("button",{onClick:handleSubmit,disabled:!allFilled||!canSubmitNow()||abnormalMap[activeIdx],style:{width:"100%",background:abnormalMap[activeIdx]?C.border:(allFilled&&canSubmitNow()?C.accent:C.border),color:abnormalMap[activeIdx]?C.textSub:(allFilled&&canSubmitNow()?"white":C.textSub),border:"none",borderRadius:10,padding:"14px",fontSize:21,fontWeight:700,cursor:allFilled&&canSubmitNow()&&!abnormalMap[activeIdx]?"pointer":"default"}},abnormalMap[activeIdx]?"⚠️ 已通報異常，等待督導更新班表":!canSubmitNow()?"🔒 班次結束後才能送出":allFilled?"確認送出　→":"請填寫所有項目"))));
+      React.createElement("button",{onClick:handleSubmit,disabled:!(allFilled&&(canSubmitNow()||abnormalMap[activeIdx])),style:{width:"100%",background:(allFilled&&(canSubmitNow()||abnormalMap[activeIdx]))?(abnormalMap[activeIdx]?C.warn:C.accent):C.border,color:(allFilled&&(canSubmitNow()||abnormalMap[activeIdx]))?"white":C.textSub,border:"none",borderRadius:10,padding:"14px",fontSize:21,fontWeight:700,cursor:(allFilled&&(canSubmitNow()||abnormalMap[activeIdx]))?"pointer":"default"}},abnormalMap[activeIdx]?(allFilled?"⚠️ 送出（含異常）　→":"請填寫所有項目"):(canSubmitNow()?(allFilled?"確認送出　→":"請填寫所有項目"):"🔒 班次結束後才能送出")))));
 
   // ── 送出完成 ──
   return React.createElement("div",{style:{minHeight:"100vh",background:C.bg,fontFamily:"'Noto Sans TC', sans-serif",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24}},
