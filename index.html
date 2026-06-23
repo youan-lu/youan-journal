@@ -535,7 +535,14 @@ function App() {
     setLoadingDay(true); setSubmitted([]); setSavedData({});
     try{
       const [dayR,phR]=await Promise.all([callAPI("getDay",{empId,month:m,day:d}),callAPI("getPhrases",{empId})]);
-      setDayList(dayR.ok?dayR.day:[]);
+      const days=dayR.ok?dayR.day:[];
+      setDayList(days);
+      // 讀回已送出狀態
+      const subIdx=[];
+      const abnIdx={};
+      days.forEach((s,i)=>{ if(s.done)subIdx.push(i); if(s.abnormal)abnIdx[i]=true; });
+      setSubmitted(subIdx);
+      setAbnormalMap(abnIdx);
       setPhrases(phR.ok?phR.phrases:{});
       setByCode(phR.ok?phR.byCode||{}:{});
     }catch(e){setDayList([]);}
