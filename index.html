@@ -554,9 +554,10 @@ function App() {
 
   const handleOpen=idx=>{
     const s=dayList[idx]; setActiveIdx(idx);
-    if(savedData[idx]){setSkin(savedData[idx].skin);setCodeValues(savedData[idx].codeValues);setExtraCodes(savedData[idx].extraCodes||[]);setFromLastMap({});}
+    if(savedData[idx]){setSkin(savedData[idx].skin);setSkinNote(savedData[idx].skinNote||"");setCodeValues(savedData[idx].codeValues);setExtraCodes(savedData[idx].extraCodes||[]);setFromLastMap({});}
     else{
       setSkin("ok");
+      setSkinNote("");
       const init={},fl={};
       s.codes.forEach(c=>{
         const key=`${s.client}_${c.code}`;
@@ -599,7 +600,7 @@ function App() {
           await fetch(API,{method:"POST",body:JSON.stringify({action:"savePhrase",empId:me.empId,empName:me.name,client:session.client,code:c.code,phrase:codeValues[c.code]})});
         }
       }
-      setSavedData(p=>({...p,[activeIdx]:{codeValues:{...codeValues},skin,extraCodes:[...extraCodes]}}));
+      setSavedData(p=>({...p,[activeIdx]:{codeValues:{...codeValues},skin,skinNote,extraCodes:[...extraCodes]}}));
       setSubmitted(prev=>prev.includes(activeIdx)?prev:[...prev,activeIdx]);
       setScreen("done");
     }catch(e){alert("送出失敗，請檢查網路後再試一次");}
