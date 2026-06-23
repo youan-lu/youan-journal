@@ -592,7 +592,7 @@ function App() {
     if(!allFilled||(!canSubmitNow()&&!isAbn)||busy)return;
     setBusy(true);
     const records=codesInSession.map(c=>({code:c.code,summary:codeValues[c.code]||"",extra:!!c.extra}));
-    const payload={empId:me.empId,empName:me.name,serviceDate:`${_now.getFullYear()-1911}/${pickMonth}/${pickDay}`,client:session.client,time:session.time,bantype:session.bantype,skin,skinNote,records,signature,abnormal:isAbn};
+    const payload={empId:me.empId,empName:me.name,serviceDate:`${_now.getFullYear()-1911}/${pickMonth}/${pickDay}`,client:session.client,time:session.time,bantype:session.bantype,skin,skinNote:skin==="new"?skinNote:"",records,signature,abnormal:isAbn};
     try{
       const submitRes=await fetch(API,{method:"POST",body:JSON.stringify({action:"submit",data:JSON.stringify(payload)})}).then(r=>r.json()).catch(()=>null);
       if(submitRes&&!submitRes.ok){alert("送出失敗："+submitRes.msg);setBusy(false);return;}
