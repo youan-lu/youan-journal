@@ -560,8 +560,7 @@ function App() {
     if(savedData[idx]){setSkin(savedData[idx].skin);setSkinNote(savedData[idx].skinNote||"");setCodeValues(savedData[idx].codeValues);setExtraCodes(savedData[idx].extraCodes||[]);setFromLastMap({});}
     else{
       const ls=lastSkin[s.client];
-      if(ls&&ls.skinNote){setSkin("new");setSkinNote(ls.skinNote);}
-      else if(ls&&ls.skin){setSkin(ls.skin);setSkinNote("");}
+      if(ls&&ls.skinNote){setSkin("prev");setSkinNote(ls.skinNote);}
       else{setSkin("ok");setSkinNote("");}
       const init={},fl={};
       s.codes.forEach(c=>{
@@ -597,7 +596,7 @@ function App() {
     if(!allFilled||(!canSubmitNow()&&!isAbn)||busy)return;
     setBusy(true);
     const records=codesInSession.map(c=>({code:c.code,summary:codeValues[c.code]||"",extra:!!c.extra}));
-    const payload={empId:me.empId,empName:me.name,serviceDate:`${_now.getFullYear()-1911}/${pickMonth}/${pickDay}`,client:session.client,time:session.time,bantype:session.bantype,skin,skinNote:skin==="new"?skinNote:"",records,signature,abnormal:isAbn};
+    const payload={empId:me.empId,empName:me.name,serviceDate:`${_now.getFullYear()-1911}/${pickMonth}/${pickDay}`,client:session.client,time:session.time,bantype:session.bantype,skin,skinNote:(skin==="new"||skin==="prev")?skinNote:"",records,signature,abnormal:isAbn};
     try{
       const submitRes=await fetch(API,{method:"POST",body:JSON.stringify({action:"submit",data:JSON.stringify(payload)})}).then(r=>r.json()).catch(()=>null);
       if(submitRes&&!submitRes.ok){alert("送出失敗："+submitRes.msg);setBusy(false);return;}
@@ -646,7 +645,7 @@ function App() {
     React.createElement("div",{style:{background:C.primary,color:"white",padding:"16px 16px 14px",position:"sticky",top:0,zIndex:10}},
       React.createElement("div",{style:{display:"flex",alignItems:"center",justifyContent:"center",gap:10,marginBottom:6}},
         React.createElement(YouanLogo,{size:34,color:C.bear}),
-        React.createElement("div",{style:{fontSize:20,fontWeight:700,letterSpacing:.5,lineHeight:1.3}},"佑安服務日誌線上填寫系統 v30")),
+        React.createElement("div",{style:{fontSize:20,fontWeight:700,letterSpacing:.5,lineHeight:1.3}},"佑安服務日誌線上填寫系統 v31")),
       React.createElement("div",{style:{fontSize:21,opacity:.85,marginTop:6,textAlign:"center"}},today,"　現在 ",NOW_STR)),
     // 員工資訊列
     React.createElement("div",{style:{margin:"12px 14px",background:C.card,borderRadius:10,padding:"12px 14px",display:"flex",justifyContent:"space-between",alignItems:"center",border:`1px solid ${C.border}`,flexWrap:"wrap",gap:8}},
@@ -762,7 +761,7 @@ function App() {
       React.createElement("div",{style:{background:C.card,borderRadius:12,padding:"14px",border:`1px solid ${C.border}`}},
         React.createElement("div",{style:{marginBottom:12}},React.createElement(PillTitle,{icon:"🩺"},"身體或皮膚狀況")),
         React.createElement(SkinStatus,{value:skin,onChange:setSkin}),
-        skin==="new"&&React.createElement("textarea",{value:skinNote,onChange:e=>setSkinNote(e.target.value),placeholder:"請說明異常狀況（位置、類型、尺寸）",rows:2,style:{marginTop:8,width:"100%",border:`1px solid ${C.warn}`,borderRadius:7,padding:"8px 10px",fontSize:19,fontFamily:"inherit",resize:"none",boxSizing:"border-box"}})),
+        (skin==="new"||skin==="prev")&&React.createElement("textarea",{value:skinNote,onChange:e=>setSkinNote(e.target.value),placeholder:"請說明異常狀況（位置、類型、尺寸）",rows:2,style:{marginTop:8,width:"100%",border:`1px solid ${C.warn}`,borderRadius:7,padding:"8px 10px",fontSize:19,fontFamily:"inherit",resize:"none",boxSizing:"border-box"}})),
       React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:10}},
         React.createElement(PillTitle,{icon:"📝"},"服務概況"),
         codesInSession.map((c,i)=>React.createElement(CodeBlock,{key:c.code+i,codeItem:c,extra:c.extra,fromLast:fromLastMap[c.code],chips:(()=>{const exact=phrases[`${session.client}_${c.code}`]||[];const all=byCode[c.code]||[];const seen=new Set(exact.map(p=>p.text));return[...exact.map(p=>({t:p.text,freq:p.count,personal:true})),...all.filter(p=>!seen.has(p.text)).map(p=>({t:p.text,freq:p.count,personal:false}))];})(),value:codeValues[c.code]||"",saved:savedTemplates[c.code],onChange:v=>{setCodeValues(p=>({...p,[c.code]:v}));setSavedTemplates(p=>({...p,[c.code]:false}));},onSaveTemplate:()=>setSavedTemplates(p=>({...p,[c.code]:true})),onRemove:()=>removeExtra(c.code)})),
