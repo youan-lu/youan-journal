@@ -522,7 +522,9 @@ function App() {
       const r=await callAPI("login",{empId:loginId.trim(),password:loginPw});
       if(!r.ok){setLoginErr(r.msg||"登入失敗");setBusy(false);return;}
       setMe({empId:r.empId,name:r.name,role:r.role});
-      if(r.signature&&r.signature.length>100){
+      if(r.role==="管理員"||r.role==="督導"){
+        setScreen("admin");
+      }else if(r.signature&&r.signature.length>100){
         setSignature(r.signature);
         setScreen("list");
         loadDay(r.empId,pickMonth,pickDay);
@@ -645,7 +647,7 @@ function App() {
     React.createElement("div",{style:{background:C.primary,color:"white",padding:"16px 16px 14px",position:"sticky",top:0,zIndex:10}},
       React.createElement("div",{style:{display:"flex",alignItems:"center",justifyContent:"center",gap:10,marginBottom:6}},
         React.createElement(YouanLogo,{size:34,color:C.bear}),
-        React.createElement("div",{style:{fontSize:20,fontWeight:700,letterSpacing:.5,lineHeight:1.3}},"佑安服務日誌線上填寫系統 v31")),
+        React.createElement("div",{style:{fontSize:20,fontWeight:700,letterSpacing:.5,lineHeight:1.3}},"佑安服務日誌線上填寫系統 v32")),
       React.createElement("div",{style:{fontSize:21,opacity:.85,marginTop:6,textAlign:"center"}},today,"　現在 ",NOW_STR)),
     // 員工資訊列
     React.createElement("div",{style:{margin:"12px 14px",background:C.card,borderRadius:10,padding:"12px 14px",display:"flex",justifyContent:"space-between",alignItems:"center",border:`1px solid ${C.border}`,flexWrap:"wrap",gap:8}},
@@ -780,7 +782,378 @@ function App() {
     React.createElement("div",{style:{fontSize:18,color:C.textSub,marginBottom:8}},today),
     React.createElement("div",{style:{fontSize:17,color:C.ok,marginBottom:32,textAlign:"center",lineHeight:1.5}},"補填期（下月2日）前",React.createElement("br"),"都可回班次清單點「已送出·可修改」修改"),
     React.createElement("button",{onClick:()=>setScreen("list"),style:{background:C.primary,color:"white",border:"none",borderRadius:10,padding:"12px 32px",fontSize:20,fontWeight:600,cursor:"pointer"}},"回到班次清單"));
+
+  // ── 管理員／督導介面 ──
+  if(screen==="admin") return React.createElement(AdminPanel,{me,callAPI,onLogout:()=>{setMe(null);setScreen("login");setLoginId("");setLoginPw("");setSignature("");}});
+
+  return null;
 }
+
+// ═══════════════════════════════════════════════════════════
+// AdminPanel 元件
+// ═══════════════════════════════════════════════════════════
+function AdminPanel({me,callAPI,onLogout}){
+  const [tab,setTab]=React.useState("logs");
+  // 日誌 tab
+  const [logs,setLogs]=React.useState([]);
+  const [logsLoading,setLogsLoading]=React.useState(false);
+  const [fDate,setFDate]=React.useState("");
+  const [fWorker,setFWorker]=React.useState("");
+  const [fClient,setFClient]=React.useState("");
+  // 異常 tab
+  const [abnLogs,setAbnLogs]=React.useState([]);
+  const [abnLoading,setAbnLoading]=React.useState(false);
+  // 漏填 tab
+  const [missing,setMissing]=React.useState([]);
+  const [missingWeek,setMissingWeek]=React.useState("");
+  const [missingLoading,setMissingLoading]=React.useState(false);
+  // 名單 tab
+  const [staffTab,setStaffTab]=React.useState("staff"); // staff / cases
+  const [staffList,setStaffList]=React.useState([]);
+  const [caseList,setCaseList]=React.useState([]);
+  const [staffLoading,setStaffLoading]=React.useState(false);
+  // 編輯日誌
+  const [editLog,setEditLog]=React.useState(null); // {log, field, value}
+  const [editBusy,setEditBusy]=React.useState(false);
+  const [editMsg,setEditMsg]=React.useState("");
+  // 員工表單
+  const [showStaffForm,setShowStaffForm]=React.useState(false);
+  const [staffForm,setStaffForm]=React.useState({rowNum:0,empId:"",name:"",tribe:"",status:"在職",empRole:"照服員",remark:""});
+  const [staffFormMsg,setStaffFormMsg]=React.useState("");
+  // 個案表單
+  const [showCaseForm,setShowCaseForm]=React.useState(false);
+  const [caseForm,setCaseForm]=React.useState({rowNum:0,caseId:"",name:"",supervisor:"",mainWorker:"",baCodes:"",cStatus:"服務中"});
+  const [caseFormMsg,setCaseFormMsg]=React.useState("");
+
+  const isAdmin=me&&me.role==="管理員";
+  const isSup=me&&me.role==="督導";
+
+  const CA={ // 顏色（複用主題）
+    bg:"#F3F4F6",card:"#FFFFFF",primary:"#1B6B3A",primaryLight:"#D1FAE5",
+    accent:"#D97706",accentLight:"#FEF3C7",ok:"#059669",okLight:"#ECFDF5",
+    warn:"#B45309",warnLight:"#FFFBEB",danger:"#DC2626",dangerLight:"#FEF2F2",
+    text:"#111827",textSub:"#6B7280",border:"#E5E7EB",divider:"#F9FAFB"
+  };
+
+  const Btn=({children,onClick,disabled,color,small})=>
+    React.createElement("button",{onClick,disabled,style:{
+      background:disabled?CA.border:(color==="danger"?CA.danger:color==="warn"?CA.accent:color==="ok"?CA.ok:CA.primary),
+      color:disabled?CA.textSub:"white",border:"none",borderRadius:8,
+      padding:small?"4px 10px":"8px 16px",fontSize:small?15:17,fontWeight:600,
+      cursor:disabled?"default":"pointer",whiteSpace:"nowrap"
+    }},children);
+
+  const Tag=({text,color})=>React.createElement("span",{style:{
+    display:"inline-block",padding:"2px 8px",borderRadius:12,fontSize:14,fontWeight:600,
+    background:color==="danger"?CA.dangerLight:color==="warn"?CA.accentLight:color==="ok"?CA.okLight:CA.primaryLight,
+    color:color==="danger"?CA.danger:color==="warn"?CA.warn:color==="ok"?CA.ok:CA.primary
+  }},text);
+
+  const skinLabel=s=>s==="ok"?"無異常":s==="prev"?"如前次":"有異常";
+  const skinColor=s=>s==="ok"?"ok":s==="prev"?"warn":"danger";
+
+  // ── 載入日誌 ──
+  const loadLogs=async()=>{
+    setLogsLoading(true);
+    try{
+      const r=await callAPI("adminGetLogs",{role:me.role,empId:me.empId,filterDate:fDate,filterWorker:fWorker,filterClient:fClient,filterSupervisor:isSup?me.name:""});
+      if(r.ok)setLogs(r.logs||[]);
+    }catch(e){}
+    setLogsLoading(false);
+  };
+
+  // ── 載入異常 ──
+  const loadAbn=async()=>{
+    setAbnLoading(true);
+    try{
+      const r=await callAPI("adminGetAbnormal",{role:me.role,empId:me.empId,filterSupervisor:isSup?me.name:""});
+      if(r.ok)setAbnLogs(r.logs||[]);
+    }catch(e){}
+    setAbnLoading(false);
+  };
+
+  // ── 解除異常 ──
+  const clearAbn=async(log)=>{
+    if(!window.confirm(`確定要解除「${log.worker} / ${log.client}」的異常標記？`))return;
+    try{
+      const r=await callAPI("adminClearAbnormal",{role:me.role,rowNum:log.row});
+      if(r.ok){setAbnLogs(prev=>prev.filter(l=>l.row!==log.row));alert("已解除");}
+      else alert(r.msg||"失敗");
+    }catch(e){alert("連線失敗");}
+  };
+
+  // ── 載入漏填 ──
+  const loadMissing=async()=>{
+    setMissingLoading(true);
+    try{
+      const r=await callAPI("adminGetMissing",{role:me.role,empId:me.empId});
+      if(r.ok){setMissing(r.missing||[]);setMissingWeek(r.week||"");}
+    }catch(e){}
+    setMissingLoading(false);
+  };
+
+  // ── 載入名單 ──
+  const loadStaff=async()=>{
+    setStaffLoading(true);
+    try{
+      const r=await callAPI("adminGetStaff",{role:me.role,empId:me.empId});
+      if(r.ok)setStaffList(r.staff||[]);
+    }catch(e){}
+    setStaffLoading(false);
+  };
+  const loadCases=async()=>{
+    setStaffLoading(true);
+    try{
+      const r=await callAPI("adminGetCases",{role:me.role,empId:me.empId,filterSupervisor:isSup?me.name:""});
+      if(r.ok)setCaseList(r.cases||[]);
+    }catch(e){}
+    setStaffLoading(false);
+  };
+
+  // ── 儲存員工 ──
+  const saveStaff=async()=>{
+    setStaffFormMsg("");setEditBusy(true);
+    try{
+      const r=await callAPI("adminSaveStaff",{role:me.role,...staffForm});
+      setStaffFormMsg(r.ok?("✓ "+r.msg):(r.msg||"失敗"));
+      if(r.ok){setShowStaffForm(false);loadStaff();}
+    }catch(e){setStaffFormMsg("連線失敗");}
+    setEditBusy(false);
+  };
+
+  // ── 儲存個案 ──
+  const saveCase=async()=>{
+    setCaseFormMsg("");setEditBusy(true);
+    try{
+      const r=await callAPI("adminSaveCase",{role:me.role,...caseForm});
+      setCaseFormMsg(r.ok?("✓ "+r.msg):(r.msg||"失敗"));
+      if(r.ok){setShowCaseForm(false);loadCases();}
+    }catch(e){setCaseFormMsg("連線失敗");}
+    setEditBusy(false);
+  };
+
+  // ── 儲存日誌修改 ──
+  const saveEditLog=async()=>{
+    if(!editLog)return;
+    setEditBusy(true);setEditMsg("");
+    try{
+      const r=await callAPI("adminEditLog",{role:me.role,rowNum:editLog.row,summary:editLog.summary,skin:editLog.skin,skinNote:editLog.skinNote,status:editLog.status,note:editLog.note});
+      if(r.ok){setEditMsg("✓ 已儲存");loadLogs();}
+      else setEditMsg(r.msg||"失敗");
+    }catch(e){setEditMsg("連線失敗");}
+    setEditBusy(false);
+  };
+
+  // ── 刪除日誌 ──
+  const deleteLog=async(log)=>{
+    if(!window.confirm(`確定刪除「${log.worker} / ${log.client} / ${log.time}」這筆日誌？此操作不可復原。`))return;
+    try{
+      const r=await callAPI("adminDeleteLog",{role:me.role,rowNum:log.row});
+      if(r.ok){setLogs(prev=>prev.filter(l=>l.row!==log.row));setEditLog(null);}
+      else alert(r.msg||"失敗");
+    }catch(e){alert("連線失敗");}
+  };
+
+  // ── tab 切換時自動載入 ──
+  React.useEffect(()=>{
+    if(tab==="logs")loadLogs();
+    else if(tab==="abn")loadAbn();
+    else if(tab==="missing")loadMissing();
+    else if(tab==="staff"){loadStaff();loadCases();}
+  },[tab]);
+
+  const dateDisp=d=>{
+    const s=String(d||"").trim();
+    const iso=s.match(/^\d+[\/\-](\d+)[\/\-](\d+)T/);
+    if(iso)return parseInt(iso[1])+"/"+parseInt(iso[2]);
+    const pts=s.split(/[\/\-]/);
+    if(pts.length>=2)return parseInt(pts[pts.length-2])+"/"+parseInt(pts[pts.length-1]);
+    return s;
+  };
+
+  // ── 版面 ──
+  const H={fontFamily:"'Noto Sans TC', sans-serif",minHeight:"100vh",background:CA.bg};
+  const topBar=React.createElement("div",{style:{background:CA.primary,color:"white",padding:"12px 16px",position:"sticky",top:0,zIndex:20,display:"flex",alignItems:"center",justifyContent:"space-between"}},
+    React.createElement("div",{style:{display:"flex",alignItems:"baseline",gap:10}},
+      React.createElement("span",{style:{fontSize:20,fontWeight:700}},"佑安管理介面"),
+      React.createElement("span",{style:{fontSize:14,opacity:.8}},"v32")),
+    React.createElement("div",{style:{display:"flex",alignItems:"center",gap:8}},
+      React.createElement("span",{style:{fontSize:15,opacity:.85}},me.name,"（",me.role,"）"),
+      React.createElement("button",{onClick:onLogout,style:{background:"rgba(255,255,255,.18)",border:"1px solid rgba(255,255,255,.4)",color:"white",borderRadius:8,padding:"5px 12px",fontSize:15,cursor:"pointer"}},"登出")));
+
+  const tabBar=React.createElement("div",{style:{display:"flex",borderBottom:`2px solid ${CA.border}`,background:CA.card,position:"sticky",top:52,zIndex:19}},
+    [["logs","📋 日誌"],["abn","⚠️ 異常"],["missing","📝 漏填"],["staff","👥 名單"]].map(([key,label])=>
+      React.createElement("button",{key,onClick:()=>setTab(key),style:{
+        flex:1,padding:"12px 4px",border:"none",borderBottom:tab===key?`3px solid ${CA.primary}`:"3px solid transparent",
+        background:"none",color:tab===key?CA.primary:CA.textSub,fontSize:16,fontWeight:tab===key?700:500,cursor:"pointer"
+      }},label)));
+
+  // ────────── 日誌 tab ──────────
+  const logsPanel=React.createElement("div",{style:{padding:"12px 12px 80px"}},
+    // 篩選列
+    React.createElement("div",{style:{background:CA.card,borderRadius:10,padding:12,marginBottom:12,display:"flex",flexWrap:"wrap",gap:8,alignItems:"flex-end"}},
+      React.createElement("div",{style:{flex:"1 1 100px"}},
+        React.createElement("div",{style:{fontSize:13,color:CA.textSub,marginBottom:3}},"日期（月/日）"),
+        React.createElement("input",{value:fDate,onChange:e=>setFDate(e.target.value),placeholder:"例：6/22",style:{width:"100%",border:`1px solid ${CA.border}`,borderRadius:7,padding:"8px 10px",fontSize:17,boxSizing:"border-box"}})),
+      React.createElement("div",{style:{flex:"1 1 100px"}},
+        React.createElement("div",{style:{fontSize:13,color:CA.textSub,marginBottom:3}},"照服員"),
+        React.createElement("input",{value:fWorker,onChange:e=>setFWorker(e.target.value),placeholder:"姓名",style:{width:"100%",border:`1px solid ${CA.border}`,borderRadius:7,padding:"8px 10px",fontSize:17,boxSizing:"border-box"}})),
+      React.createElement("div",{style:{flex:"1 1 100px"}},
+        React.createElement("div",{style:{fontSize:13,color:CA.textSub,marginBottom:3}},"個案"),
+        React.createElement("input",{value:fClient,onChange:e=>setFClient(e.target.value),placeholder:"姓名",style:{width:"100%",border:`1px solid ${CA.border}`,borderRadius:7,padding:"8px 10px",fontSize:17,boxSizing:"border-box"}})),
+      React.createElement(Btn,{onClick:loadLogs,disabled:logsLoading},"🔍 查詢")),
+    // 結果
+    logsLoading?React.createElement("div",{style:{textAlign:"center",padding:40,fontSize:18,color:CA.textSub}},"載入中…"):
+    logs.length===0?React.createElement("div",{style:{textAlign:"center",padding:40,fontSize:18,color:CA.textSub}},"無資料"):
+    logs.map(log=>React.createElement("div",{key:log.row,onClick:()=>setEditLog(editLog&&editLog.row===log.row?null:{...log}),style:{background:CA.card,borderRadius:10,marginBottom:8,padding:"10px 12px",border:`1px solid ${log.status==="異常"||log.status==="班表異常"?CA.accent:CA.border}`,cursor:"pointer"}},
+      React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}},
+        React.createElement("div",{style:{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}},
+          React.createElement("span",{style:{fontSize:18,fontWeight:700,color:CA.text}},log.client),
+          React.createElement("span",{style:{fontSize:15,color:CA.textSub}},dateDisp(log.date)," ",log.time),
+          React.createElement("span",{style:{fontSize:14,color:CA.primary}},log.worker)),
+        React.createElement(Tag,{text:log.status,color:log.status==="已送出"?"ok":log.status==="異常"?"warn":"danger"})),
+      React.createElement("div",{style:{fontSize:14,color:CA.textSub,marginBottom:3}},log.baCode),
+      React.createElement("div",{style:{fontSize:16,color:CA.text,marginBottom:log.skinNote?4:0}},log.summary||"（無服務概況）"),
+      log.skinNote&&React.createElement("div",{style:{fontSize:14,color:CA.warn}},"⚠️ ",log.skinNote),
+      // 展開編輯區
+      editLog&&editLog.row===log.row&&React.createElement("div",{onClick:e=>e.stopPropagation(),style:{marginTop:10,borderTop:`1px solid ${CA.border}`,paddingTop:10,display:"flex",flexDirection:"column",gap:8}},
+        React.createElement("textarea",{value:editLog.summary,onChange:e=>setEditLog(p=>({...p,summary:e.target.value})),rows:2,placeholder:"服務概況",style:{width:"100%",border:`1px solid ${CA.border}`,borderRadius:7,padding:"8px 10px",fontSize:17,fontFamily:"inherit",resize:"none",boxSizing:"border-box"}}),
+        React.createElement("select",{value:editLog.skin,onChange:e=>setEditLog(p=>({...p,skin:e.target.value})),style:{border:`1px solid ${CA.border}`,borderRadius:7,padding:"8px",fontSize:17}},
+          React.createElement("option",{value:"ok"},"無異常"),
+          React.createElement("option",{value:"prev"},"異常如前次"),
+          React.createElement("option",{value:"new"},"有異常")),
+        (editLog.skin==="new"||editLog.skin==="prev")&&React.createElement("input",{value:editLog.skinNote||"",onChange:e=>setEditLog(p=>({...p,skinNote:e.target.value})),placeholder:"異常說明",style:{border:`1px solid ${CA.warn}`,borderRadius:7,padding:"8px 10px",fontSize:17,boxSizing:"border-box",width:"100%"}}),
+        React.createElement("input",{value:editLog.note||"",onChange:e=>setEditLog(p=>({...p,note:e.target.value})),placeholder:"備註（選填）",style:{border:`1px solid ${CA.border}`,borderRadius:7,padding:"8px 10px",fontSize:17,boxSizing:"border-box",width:"100%"}}),
+        React.createElement("div",{style:{display:"flex",gap:8,flexWrap:"wrap"}},
+          React.createElement(Btn,{onClick:saveEditLog,disabled:editBusy,color:"ok"},"💾 儲存"),
+          isAdmin&&React.createElement(Btn,{onClick:()=>deleteLog(log),disabled:editBusy,color:"danger"},"🗑️ 刪除"),
+          React.createElement(Btn,{onClick:()=>setEditLog(null),color:""},"取消")),
+        editMsg&&React.createElement("div",{style:{fontSize:16,color:editMsg.startsWith("✓")?CA.ok:CA.danger}},editMsg)))));
+
+  // ────────── 異常 tab ──────────
+  const abnPanel=React.createElement("div",{style:{padding:"12px 12px 80px"}},
+    abnLoading?React.createElement("div",{style:{textAlign:"center",padding:40,fontSize:18,color:CA.textSub}},"載入中…"):
+    abnLogs.length===0?React.createElement("div",{style:{textAlign:"center",padding:40,fontSize:18,color:CA.textSub,lineHeight:2}},"✅ 目前無異常通報"):
+    abnLogs.map(log=>React.createElement("div",{key:log.row,style:{background:CA.card,borderRadius:10,marginBottom:8,padding:"12px 14px",border:`1.5px solid ${CA.accent}`}},
+      React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}},
+        React.createElement("div",null,
+          React.createElement("div",{style:{fontSize:18,fontWeight:700,color:CA.text}},log.client),
+          React.createElement("div",{style:{fontSize:15,color:CA.textSub}},dateDisp(log.date)," ",log.time,"　",log.worker)),
+        React.createElement(Tag,{text:log.status,color:"warn"})),
+      log.note&&React.createElement("div",{style:{fontSize:15,color:CA.warn,marginBottom:6}},log.note),
+      log.skinNote&&React.createElement("div",{style:{fontSize:15,color:CA.warn,marginBottom:6}},"⚠️ ",log.skinNote),
+      isAdmin&&React.createElement(Btn,{onClick:()=>clearAbn(log),small:true,color:"ok"},"✓ 解除異常"))));
+
+  // ────────── 漏填 tab ──────────
+  const missingPanel=React.createElement("div",{style:{padding:"12px 12px 80px"}},
+    React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}},
+      React.createElement("div",{style:{fontSize:16,color:CA.textSub}},missingWeek?"查詢週："+missingWeek:"查詢上一週"),
+      React.createElement(Btn,{onClick:loadMissing,disabled:missingLoading},"🔄 重新查詢")),
+    missingLoading?React.createElement("div",{style:{textAlign:"center",padding:40,fontSize:18,color:CA.textSub}},"查詢中…"):
+    missing.length===0?React.createElement("div",{style:{textAlign:"center",padding:40,fontSize:18,color:CA.ok,lineHeight:2}},"✅ 本週無漏填"):
+    React.createElement("div",null,
+      React.createElement("div",{style:{fontSize:15,color:CA.warn,marginBottom:8}},"共 ",missing.length," 筆未填"),
+      missing.map((m,i)=>React.createElement("div",{key:i,style:{background:CA.card,borderRadius:8,marginBottom:6,padding:"10px 12px",border:`1px solid ${CA.border}`}},
+        React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center"}},
+          React.createElement("div",null,
+            React.createElement("span",{style:{fontSize:16,fontWeight:700,color:CA.text}},m.empName||m.empId),
+            React.createElement("span",{style:{fontSize:14,color:CA.textSub,marginLeft:8}},m.month+"/"+m.day," ",m.time)),
+          React.createElement("span",{style:{fontSize:15,color:CA.warn}},m.client))))));
+
+  // ────────── 名單 tab ──────────
+  const InputRow=({label,value,onChange,placeholder,small})=>
+    React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:3,flex:"1 1 "+(small?"120px":"200px")}},
+      React.createElement("div",{style:{fontSize:13,color:CA.textSub}},label),
+      React.createElement("input",{value,onChange:e=>onChange(e.target.value),placeholder:placeholder||"",style:{border:`1px solid ${CA.border}`,borderRadius:7,padding:"7px 10px",fontSize:16,boxSizing:"border-box"}}));
+
+  const staffPanel=React.createElement("div",{style:{padding:"12px 12px 80px"}},
+    // 子 tab
+    React.createElement("div",{style:{display:"flex",gap:8,marginBottom:12}},
+      ["staff","cases"].map(k=>React.createElement("button",{key:k,onClick:()=>setStaffTab(k),style:{
+        flex:1,padding:"10px",border:"none",borderRadius:8,
+        background:staffTab===k?CA.primary:CA.card,color:staffTab===k?"white":CA.textSub,
+        fontSize:16,fontWeight:staffTab===k?700:500,cursor:"pointer",border:`1px solid ${staffTab===k?CA.primary:CA.border}`
+      }},k==="staff"?"👤 員工（"+staffList.length+"）":"🏠 個案（"+caseList.length+"）"))),
+
+    // 員工
+    staffTab==="staff"&&React.createElement("div",null,
+      isAdmin&&React.createElement("div",{style:{marginBottom:10}},
+        React.createElement(Btn,{onClick:()=>{setStaffForm({rowNum:0,empId:"",name:"",tribe:"",status:"在職",empRole:"照服員",remark:""});setStaffFormMsg("");setShowStaffForm(true)}},"＋ 新增員工")),
+      staffLoading?React.createElement("div",{style:{textAlign:"center",padding:30,color:CA.textSub}},"載入中…"):
+      staffList.map(s=>React.createElement("div",{key:s.row,style:{background:CA.card,borderRadius:8,marginBottom:6,padding:"10px 12px",border:`1px solid ${CA.border}`}},
+        React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center"}},
+          React.createElement("div",null,
+            React.createElement("span",{style:{fontSize:17,fontWeight:700,color:CA.text}},s.name),
+            React.createElement("span",{style:{fontSize:14,color:CA.textSub,marginLeft:8}},s.empId),
+            React.createElement("span",{style:{fontSize:13,color:CA.primary,marginLeft:6}},s.role)),
+          React.createElement("div",{style:{display:"flex",gap:6,alignItems:"center"}},
+            React.createElement(Tag,{text:s.status,color:s.status==="在職"?"ok":"danger"}),
+            isAdmin&&React.createElement(Btn,{small:true,onClick:()=>{setStaffForm({rowNum:s.row,empId:s.empId,name:s.name,tribe:s.tribe,status:s.status,empRole:s.role,remark:s.remark});setStaffFormMsg("");setShowStaffForm(true);}},"修改"))))),
+      // 員工表單
+      showStaffForm&&React.createElement("div",{style:{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:50,display:"flex",alignItems:"center",justifyContent:"center",padding:16}},
+        React.createElement("div",{style:{background:CA.card,borderRadius:12,padding:20,width:"100%",maxWidth:480,maxHeight:"90vh",overflowY:"auto"}},
+          React.createElement("div",{style:{fontSize:20,fontWeight:700,marginBottom:14}},staffForm.rowNum?"修改員工":"新增員工"),
+          React.createElement("div",{style:{display:"flex",flexWrap:"wrap",gap:10,marginBottom:10}},
+            React.createElement(InputRow,{label:"員工編號",value:staffForm.empId,onChange:v=>setStaffForm(p=>({...p,empId:v}))}),
+            React.createElement(InputRow,{label:"姓名",value:staffForm.name,onChange:v=>setStaffForm(p=>({...p,name:v}))}),
+            React.createElement(InputRow,{label:"族群",value:staffForm.tribe,onChange:v=>setStaffForm(p=>({...p,tribe:v})),small:true})),
+          React.createElement("div",{style:{display:"flex",flexWrap:"wrap",gap:10,marginBottom:14}},
+            React.createElement("div",{style:{flex:"1 1 120px"}},
+              React.createElement("div",{style:{fontSize:13,color:CA.textSub,marginBottom:3}},"在職狀態"),
+              React.createElement("select",{value:staffForm.status,onChange:e=>setStaffForm(p=>({...p,status:e.target.value})),style:{width:"100%",border:`1px solid ${CA.border}`,borderRadius:7,padding:"7px",fontSize:16}},
+                ["在職","離職","留停"].map(v=>React.createElement("option",{key:v,value:v},v)))),
+            React.createElement("div",{style:{flex:"1 1 120px"}},
+              React.createElement("div",{style:{fontSize:13,color:CA.textSub,marginBottom:3}},"角色"),
+              React.createElement("select",{value:staffForm.empRole,onChange:e=>setStaffForm(p=>({...p,empRole:e.target.value})),style:{width:"100%",border:`1px solid ${CA.border}`,borderRadius:7,padding:"7px",fontSize:16}},
+                ["照服員","督導","管理員"].map(v=>React.createElement("option",{key:v,value:v},v)))),
+            React.createElement(InputRow,{label:"備註",value:staffForm.remark,onChange:v=>setStaffForm(p=>({...p,remark:v}))})),
+          staffFormMsg&&React.createElement("div",{style:{fontSize:16,color:staffFormMsg.startsWith("✓")?CA.ok:CA.danger,marginBottom:8}},staffFormMsg),
+          React.createElement("div",{style:{display:"flex",gap:8}},
+            React.createElement(Btn,{onClick:saveStaff,disabled:editBusy},"儲存"),
+            React.createElement(Btn,{onClick:()=>setShowStaffForm(false),color:""},"取消"))))),
+
+    // 個案
+    staffTab==="cases"&&React.createElement("div",null,
+      isAdmin&&React.createElement("div",{style:{marginBottom:10}},
+        React.createElement(Btn,{onClick:()=>{setCaseForm({rowNum:0,caseId:"",name:"",supervisor:"",mainWorker:"",baCodes:"",cStatus:"服務中"});setCaseFormMsg("");setShowCaseForm(true)}},"＋ 新增個案")),
+      staffLoading?React.createElement("div",{style:{textAlign:"center",padding:30,color:CA.textSub}},"載入中…"):
+      caseList.map(c=>React.createElement("div",{key:c.row,style:{background:CA.card,borderRadius:8,marginBottom:6,padding:"10px 12px",border:`1px solid ${CA.border}`}},
+        React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}},
+          React.createElement("div",null,
+            React.createElement("div",{style:{fontSize:17,fontWeight:700,color:CA.text}},c.name),
+            React.createElement("div",{style:{fontSize:13,color:CA.textSub,marginTop:2}},
+              "督導：",c.supervisor||"—","　主責：",c.mainWorker||"—")),
+          React.createElement("div",{style:{display:"flex",gap:6,alignItems:"center"}},
+            React.createElement(Tag,{text:c.status,color:c.status==="服務中"?"ok":"danger"}),
+            isAdmin&&React.createElement(Btn,{small:true,onClick:()=>{setCaseForm({rowNum:c.row,caseId:c.caseId,name:c.name,supervisor:c.supervisor,mainWorker:c.mainWorker,baCodes:c.baCodes,cStatus:c.status});setCaseFormMsg("");setShowCaseForm(true);}},"修改"))),
+        c.baCodes&&React.createElement("div",{style:{fontSize:13,color:CA.primary,marginTop:4}},c.baCodes))),
+      // 個案表單
+      showCaseForm&&React.createElement("div",{style:{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:50,display:"flex",alignItems:"center",justifyContent:"center",padding:16}},
+        React.createElement("div",{style:{background:CA.card,borderRadius:12,padding:20,width:"100%",maxWidth:480,maxHeight:"90vh",overflowY:"auto"}},
+          React.createElement("div",{style:{fontSize:20,fontWeight:700,marginBottom:14}},caseForm.rowNum?"修改個案":"新增個案"),
+          React.createElement("div",{style:{display:"flex",flexWrap:"wrap",gap:10,marginBottom:14}},
+            React.createElement(InputRow,{label:"案號（選填）",value:caseForm.caseId,onChange:v=>setCaseForm(p=>({...p,caseId:v}))}),
+            React.createElement(InputRow,{label:"姓名",value:caseForm.name,onChange:v=>setCaseForm(p=>({...p,name:v}))}),
+            React.createElement(InputRow,{label:"主責督導",value:caseForm.supervisor,onChange:v=>setCaseForm(p=>({...p,supervisor:v}))}),
+            React.createElement(InputRow,{label:"主責照服員",value:caseForm.mainWorker,onChange:v=>setCaseForm(p=>({...p,mainWorker:v}))}),
+            React.createElement(InputRow,{label:"常用BA碼",value:caseForm.baCodes,onChange:v=>setCaseForm(p=>({...p,baCodes:v}))}),
+            React.createElement("div",{style:{flex:"1 1 120px"}},
+              React.createElement("div",{style:{fontSize:13,color:CA.textSub,marginBottom:3}},"服務狀態"),
+              React.createElement("select",{value:caseForm.cStatus,onChange:e=>setCaseForm(p=>({...p,cStatus:e.target.value})),style:{width:"100%",border:`1px solid ${CA.border}`,borderRadius:7,padding:"7px",fontSize:16}},
+                ["服務中","暫停","結案"].map(v=>React.createElement("option",{key:v,value:v},v))))),
+          caseFormMsg&&React.createElement("div",{style:{fontSize:16,color:caseFormMsg.startsWith("✓")?CA.ok:CA.danger,marginBottom:8}},caseFormMsg),
+          React.createElement("div",{style:{display:"flex",gap:8}},
+            React.createElement(Btn,{onClick:saveCase,disabled:editBusy},"儲存"),
+            React.createElement(Btn,{onClick:()=>setShowCaseForm(false),color:""},"取消"))))));
+
+  return React.createElement("div",{style:H},
+    topBar,tabBar,
+    tab==="logs"?logsPanel:
+    tab==="abn"?abnPanel:
+    tab==="missing"?missingPanel:
+    staffPanel);
+}
+
 
 const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(React.createElement(App));
