@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>佑安管理介面 v1</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+html,body{margin:0;padding:0;background:#F3F4F6;font-family:'Noto Sans TC',sans-serif;font-size:16px;}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+const API="https://script.google.com/macros/s/AKfycbzkIbth25AlFyTLsFyUsqo7ToyTctvk0pLQDUiiAoMW4qthdQtpYni_av_g7zW_RiWP/exec";
+
+// ── 顏色 ──
+const C={
+  bg:"#F3F4F6",card:"#FFFFFF",
+  primary:"#1B6B3A",primaryLight:"#D1FAE5",
+  accent:"#D97706",accentLight:"#FEF3C7",
+  ok:"#059669",okLight:"#ECFDF5",
+  warn:"#B45309",warnLight:"#FFFBEB",
+  danger:"#DC2626",dangerLight:"#FEF2F2",
+  text:"#111827",textSub:"#6B7280",
+  border:"#E5E7EB",divider:"#F9FAFB"
+};
+
+// ── API 呼叫 ──
+async function callAPI(action,params={}){
+  const body=JSON.stringify({action,...params});
+  const r=await fetch(API,{method:"POST",body,headers:{"Content-Type":"text/plain"}});
+  return r.json();
+}
+
+// ── 狀態 ──
+let state={
+  screen:"login",   // login | main
+  me:null,
+  tab:"logs",       // logs | abn | missing | staff
+  staffTab:"staff", // staff | cases
+  // 日誌
+  logs:[],logsLoading:false,
+  fDate:"",fWorker:"",fClient:"",
+  editLog:null,editBusy:false,editMsg:"",
+  // 異常
+  abnLogs:[],abnLoading:false,
+  // 漏填
+  missing:[],missingWeek:"",missingLoading:false,
+  // 名單
+  staffList:[],caseList:[],staffLoading:false,
+  showStaffForm:false,
+  staffForm:{rowNum:0,empId:"",name:"",tribe:"",status:"在職",empRole:"照服員",remark:""},
+  staffFormMsg:"",
+  showCaseForm:false,
+  caseForm:{rowNum:0,caseId:"",name:"",supervisor:"",mainWorker:"",baCodes:"",cStatus:"服務中"},
+  caseFormMsg:"",
+  // 登入
+  loginId:"",loginPw:"",loginErr:"",loginBusy:false,
+};
+
+function setState(patch){Object.assign(state,patch);render();}
+
+// ── 工具 ──
+function dateDisp(d){
+  const s=String(d||"").trim();
+  const iso=s.match(/^\d+[\/\-](\d+)[\/\-](\d+)T/);
+  if(iso)return parseInt(iso[1])+"/"+parseInt(iso[2]);
+  const pts=s.split(/[\/\-]/);
+  if(pts.length>=2)return parseInt(pts[pts.length-2])+"/"+parseInt(pts[pts.length-1]);
+  return s;
+}
+
+// ── 載入資料 ──
+async function loadLogs(){
+  setState({logsLoading:true});
+  try{
+    const r=await callAPI("adminGetLogs",{role:state.me.role,empId:state.me.empId,
+      filterDate:state.fDate,filterWorker:state.fWorker,filterClient:state.fClient,
+      filterSupervisor:state.me.role==="督導"?state.me.name:""});
+    if(r.ok)setState({logs:r.logs||[],logsLoading:false});
+    else setState({logsLoading:false});
+  }catch(e){setState({logsLoading:false});}
+}
+async function loadAbn(){
+  setState({abnLoading:true});
+  try{
+    const r=await callAPI("adminGetAbnormal",{role:state.me.role,empId:state.me.empId,
+      filterSupervisor:state.me.role==="督導"?state.me.name:""});
+    if(r.ok)setState({abnLogs:r.logs||[],abnLoading:false});
+    else setState({abnLoading:false});
+  }catch(e){setState({abnLoading:false});}
+}
+async function loadMissing(){
+  setState({missingLoading:true});
+  try{
+    const r=await callAPI("adminGetMissing",{role:state.me.role,empId:state.me.empId});
+    if(r.ok)setState({missing:r.missing||[],missingWeek:r.week||"",missingLoading:false});
+    else setState({missingLoading:false});
+  }catch(e){setState({missingLoading:false});}
+}
+async function loadStaff(){
+  setState({staffLoading:true});
+  try{
+    const r=await callAPI("adminGetStaff",{role:state.me.role,empId:state.me.empId});
+    if(r.ok)setState({staffList:r.staff||[],staffLoading:false});
+    else setState({staffLoading:false});
+  }catch(e){setState({staffLoading:false});}
+}
+async function loadCases(){
+  setState({staffLoading:true});
+  try{
+    const r=await callAPI("adminGetCases",{role:state.me.role,empId:state.me.empId,
+      filterSupervisor:state.me.role==="督導"?state.me.name:""});
+    if(r.ok)setState({caseList:r.cases||[],staffLoading:false});
+    else setState({staffLoading:false});
+  }catch(e){setState({staffLoading:false});}
+}
+
+function switchTab(tab){
+  setState({tab,editLog:null,editMsg:""});
+  if(tab==="logs")loadLogs();
+  else if(tab==="abn")loadAbn();
+  else if(tab==="missing")loadMissing();
+  else if(tab==="staff"){loadStaff();loadCases();}
+}
+
+// ── 操作 ──
+async function doLogin(){
+  if(!state.loginId||!state.loginPw)return;
+  setState({loginBusy:true,loginErr:""});
+  try{
+    const r=await callAPI("login",{empId:state.loginId.trim(),password:state.loginPw});
+    if(!r.ok){setState({loginErr:r.msg||"登入失敗",loginBusy:false});return;}
+    if(r.role!=="管理員"&&r.role!=="督導"){
+      setState({loginErr:"此帳號無管理員或督導權限",loginBusy:false});return;
+    }
+    setState({me:{empId:r.empId,name:r.name,role:r.role},screen:"main",loginBusy:false});
+    switchTab("logs");
+  }catch(e){setState({loginErr:"連線失敗，請檢查網路",loginBusy:false});}
+}
+
+function doLogout(){
+  setState({screen:"login",me:null,loginId:"",loginPw:"",loginErr:"",
+    logs:[],abnLogs:[],missing:[],staffList:[],caseList:[],editLog:null});
+}
+
+async function clearAbn(log){
+  if(!confirm("確定要解除「"+log.worker+" / "+log.client+"」的異常標記？"))return;
+  try{
+    const r=await callAPI("adminClearAbnormal",{role:state.me.role,rowNum:log.row});
+    if(r.ok){setState({abnLogs:state.abnLogs.filter(l=>l.row!==log.row)});alert("已解除");}
+    else alert(r.msg||"失敗");
+  }catch(e){alert("連線失敗");}
+}
+
+async function saveEditLog(){
+  if(!state.editLog)return;
+  setState({editBusy:true,editMsg:""});
+  try{
+    const r=await callAPI("adminEditLog",{role:state.me.role,rowNum:state.editLog.row,
+      summary:state.editLog.summary,skin:state.editLog.skin,
+      skinNote:state.editLog.skinNote,status:state.editLog.status,note:state.editLog.note});
+    if(r.ok){setState({editMsg:"✓ 已儲存",editBusy:false});loadLogs();}
+    else setState({editMsg:r.msg||"失敗",editBusy:false});
+  }catch(e){setState({editMsg:"連線失敗",editBusy:false});}
+}
+
+async function deleteLog(log){
+  if(!confirm("確定刪除「"+log.worker+" / "+log.client+" / "+log.time+"」？此操作不可復原。"))return;
+  try{
+    const r=await callAPI("adminDeleteLog",{role:state.me.role,rowNum:log.row});
+    if(r.ok){setState({logs:state.logs.filter(l=>l.row!==log.row),editLog:null});}
+    else alert(r.msg||"失敗");
+  }catch(e){alert("連線失敗");}
+}
+
+async function saveStaff(){
+  setState({editBusy:true,staffFormMsg:""});
+  try{
+    const r=await callAPI("adminSaveStaff",{role:state.me.role,...state.staffForm});
+    if(r.ok){setState({showStaffForm:false,editBusy:false,staffFormMsg:""});loadStaff();}
+    else setState({staffFormMsg:r.msg||"失敗",editBusy:false});
+  }catch(e){setState({staffFormMsg:"連線失敗",editBusy:false});}
+}
+
+async function saveCase(){
+  setState({editBusy:true,caseFormMsg:""});
+  try{
+    const r=await callAPI("adminSaveCase",{role:state.me.role,...state.caseForm});
+    if(r.ok){setState({showCaseForm:false,editBusy:false,caseFormMsg:""});loadCases();}
+    else setState({caseFormMsg:r.msg||"失敗",editBusy:false});
+  }catch(e){setState({caseFormMsg:"連線失敗",editBusy:false});}
+}
+
+// ── HTML 產生器 ──
+function h(tag,attrs,...children){
+  const el=document.createElement(tag);
+  if(attrs)Object.entries(attrs).forEach(([k,v])=>{
+    if(k==="style"&&typeof v==="object")Object.assign(el.style,v);
+    else if(k.startsWith("on"))el.addEventListener(k.slice(2).toLowerCase(),v);
+    else if(k==="className")el.className=v;
+    else el.setAttribute(k,v);
+  });
+  children.flat(Infinity).forEach(c=>{
+    if(c==null||c===false)return;
+    el.appendChild(typeof c==="string"||typeof c==="number"?document.createTextNode(String(c)):c);
+  });
+  return el;
+}
+
+function Btn(text,onClick,opts={}){
+  const colors={danger:C.danger,warn:C.accent,ok:C.ok,ghost:C.textSub};
+  const bg=opts.disabled?C.border:opts.outline?"transparent":(colors[opts.color]||C.primary);
+  const col=opts.disabled?C.textSub:opts.outline?(colors[opts.color]||C.primary):"white";
+  return h("button",{
+    onclick:opts.disabled?null:onClick,
+    style:{background:bg,color:col,border:opts.outline?`1.5px solid ${colors[opts.color]||C.primary}`:"none",
+      borderRadius:8,padding:opts.small?"5px 12px":"9px 18px",fontSize:opts.small?14:16,
+      fontWeight:600,cursor:opts.disabled?"default":"pointer",whiteSpace:"nowrap",
+      fontFamily:"inherit",opacity:opts.disabled?0.6:1}
+  },text);
+}
+
+function Tag(text,color){
+  const bg={ok:C.okLight,warn:C.accentLight,danger:C.dangerLight}[color]||C.primaryLight;
+  const fg={ok:C.ok,warn:C.warn,danger:C.danger}[color]||C.primary;
+  return h("span",{style:{display:"inline-block",padding:"2px 9px",borderRadius:12,
+    fontSize:13,fontWeight:600,background:bg,color:fg}},text);
+}
+
+function Input(val,onInput,placeholder,opts={}){
+  const el=h("input",{
+    type:opts.password?"password":"text",
+    value:val,placeholder:placeholder||"",
+    style:{width:"100%",border:`1px solid ${C.border}`,borderRadius:8,
+      padding:"10px 12px",fontSize:16,boxSizing:"border-box",fontFamily:"inherit",
+      outline:"none",background:"white"}
+  });
+  el.addEventListener("input",e=>onInput(e.target.value));
+  if(opts.onenter)el.addEventListener("keydown",e=>{if(e.key==="Enter")opts.onenter();});
+  return el;
+}
+
+function Select(val,options,onChange){
+  const el=h("select",{style:{width:"100%",border:`1px solid ${C.border}`,borderRadius:8,
+    padding:"10px 12px",fontSize:16,fontFamily:"inherit",background:"white"}});
+  options.forEach(([v,label])=>{
+    const opt=h("option",{value:v},label||v);
+    if(v===val)opt.selected=true;
+    el.appendChild(opt);
+  });
+  el.addEventListener("change",e=>onChange(e.target.value));
+  return el;
+}
+
+// ── 畫面：登入 ──
+function renderLogin(){
+  return h("div",{style:{minHeight:"100vh",background:C.bg,display:"flex",flexDirection:"column",
+    alignItems:"center",justifyContent:"center",padding:"24px"}},
+    h("div",{style:{background:C.card,borderRadius:16,padding:"32px 28px",width:"100%",
+      maxWidth:400,boxShadow:"0 4px 24px rgba(0,0,0,.08)"}},
+      h("div",{style:{textAlign:"center",marginBottom:28}},
+        h("div",{style:{fontSize:36,marginBottom:8}},"🏥"),
+        h("div",{style:{fontSize:22,fontWeight:700,color:C.primary}},"佑安管理介面"),
+        h("div",{style:{fontSize:14,color:C.textSub,marginTop:4}},"管理員 / 督導 專用")),
+      h("div",{style:{marginBottom:14}},
+        h("div",{style:{fontSize:14,color:C.textSub,marginBottom:6}},"員工編號"),
+        Input(state.loginId,v=>setState({loginId:v}),"輸入員工編號",{onenter:doLogin})),
+      h("div",{style:{marginBottom:20}},
+        h("div",{style:{fontSize:14,color:C.textSub,marginBottom:6}},"密碼"),
+        Input(state.loginPw,v=>setState({loginPw:v}),"輸入密碼",{password:true,onenter:doLogin})),
+      state.loginErr&&h("div",{style:{color:C.danger,fontSize:14,marginBottom:12,
+        background:C.dangerLight,padding:"8px 12px",borderRadius:8}},state.loginErr),
+      h("button",{onclick:doLogin,style:{width:"100%",background:state.loginBusy?C.ok:C.primary,
+        color:"white",border:"none",borderRadius:10,padding:"13px",fontSize:18,fontWeight:700,
+        cursor:state.loginBusy?"default":"pointer",fontFamily:"inherit"}},
+        state.loginBusy?"登入中…":"登入")));
+}
+
+// ── 畫面：主介面 ──
+function renderMain(){
+  // 頂部欄
+  const topBar=h("div",{style:{background:C.primary,color:"white",padding:"12px 16px",
+    position:"sticky",top:0,zIndex:20,display:"flex",alignItems:"center",
+    justifyContent:"space-between"}},
+    h("div",null,
+      h("span",{style:{fontSize:19,fontWeight:700}},"佑安管理介面"),
+      h("span",{style:{fontSize:13,opacity:.75,marginLeft:8}},"v1")),
+    h("div",{style:{display:"flex",alignItems:"center",gap:8}},
+      h("span",{style:{fontSize:14,opacity:.85}},state.me.name+"（"+state.me.role+"）"),
+      Btn("登出",doLogout,{outline:true,color:"ghost",small:true})));
+
+  // Tab 列
+  const tabs=[["logs","📋 日誌"],["abn","⚠️ 異常"],["missing","📝 漏填"],["staff","👥 名單"]];
+  const tabBar=h("div",{style:{display:"flex",background:C.card,
+    borderBottom:`2px solid ${C.border}`,position:"sticky",top:52,zIndex:19}},
+    ...tabs.map(([key,label])=>h("button",{
+      onclick:()=>switchTab(key),
+      style:{flex:1,padding:"12px 4px",border:"none",
+        borderBottom:state.tab===key?`3px solid ${C.primary}`:"3px solid transparent",
+        background:"none",color:state.tab===key?C.primary:C.textSub,
+        fontSize:15,fontWeight:state.tab===key?700:500,cursor:"pointer",fontFamily:"inherit"}
+    },label)));
+
+  let panel;
+  if(state.tab==="logs")panel=renderLogs();
+  else if(state.tab==="abn")panel=renderAbn();
+  else if(state.tab==="missing")panel=renderMissing();
+  else panel=renderStaff();
+
+  return h("div",{style:{minHeight:"100vh",background:C.bg}},topBar,tabBar,panel);
+}
+
+// ── 日誌 Tab ──
+function renderLogs(){
+  const isAdmin=state.me.role==="管理員";
+  const wrap=h("div",{style:{padding:"12px 12px 80px"}});
+
+  // 篩選
+  const filterRow=h("div",{style:{background:C.card,borderRadius:10,padding:12,
+    marginBottom:12,display:"flex",flexWrap:"wrap",gap:8,alignItems:"flex-end"}});
+  const addFilter=(label,val,key,ph)=>{
+    const col=h("div",{style:{flex:"1 1 100px"}});
+    col.appendChild(h("div",{style:{fontSize:12,color:C.textSub,marginBottom:4}},label));
+    col.appendChild(Input(val,v=>setState({[key]:v}),ph));
+    filterRow.appendChild(col);
+  };
+  addFilter("日期（月/日）",state.fDate,"fDate","例：6/22");
+  addFilter("照服員",state.fWorker,"fWorker","姓名");
+  addFilter("個案",state.fClient,"fClient","姓名");
+  filterRow.appendChild(Btn("🔍 查詢",loadLogs,{disabled:state.logsLoading}));
+  wrap.appendChild(filterRow);
+
+  if(state.logsLoading){
+    wrap.appendChild(h("div",{style:{textAlign:"center",padding:40,color:C.textSub}},"載入中…"));
+    return wrap;
+  }
+  if(state.logs.length===0){
+    wrap.appendChild(h("div",{style:{textAlign:"center",padding:40,color:C.textSub}},"無資料"));
+    return wrap;
+  }
+
+  state.logs.forEach(log=>{
+    const isEditing=state.editLog&&state.editLog.row===log.row;
+    const card=h("div",{
+      onclick:()=>setState({editLog:isEditing?null:{...log},editMsg:""}),
+      style:{background:C.card,borderRadius:10,marginBottom:8,padding:"10px 12px",
+        border:`1px solid ${log.status==="異常"||log.status==="班表異常"?C.accent:C.border}`,
+        cursor:"pointer"}});
+
+    card.appendChild(h("div",{style:{display:"flex",justifyContent:"space-between",
+      alignItems:"center",marginBottom:4}},
+      h("div",{style:{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}},
+        h("span",{style:{fontSize:17,fontWeight:700,color:C.text}},log.client),
+        h("span",{style:{fontSize:14,color:C.textSub}},dateDisp(log.date)+" "+log.time),
+        h("span",{style:{fontSize:13,color:C.primary}},log.worker)),
+      Tag(log.status,log.status==="已送出"?"ok":log.status==="異常"?"warn":"danger")));
+
+    card.appendChild(h("div",{style:{fontSize:13,color:C.textSub,marginBottom:2}},log.baCode));
+    card.appendChild(h("div",{style:{fontSize:15,color:C.text}},log.summary||"（無服務概況）"));
+    if(log.skinNote)card.appendChild(h("div",{style:{fontSize:13,color:C.warn,marginTop:2}},"⚠️ "+log.skinNote));
+
+    // 展開編輯
+    if(isEditing){
+      const editArea=h("div",{
+        onclick:e=>e.stopPropagation(),
+        style:{marginTop:10,borderTop:`1px solid ${C.border}`,paddingTop:10,
+          display:"flex",flexDirection:"column",gap:8}});
+
+      const ta=h("textarea",{rows:2,placeholder:"服務概況",
+        style:{width:"100%",border:`1px solid ${C.border}`,borderRadius:7,
+          padding:"8px 10px",fontSize:16,fontFamily:"inherit",resize:"none",
+          boxSizing:"border-box"}},state.editLog.summary||"");
+      ta.addEventListener("input",e=>state.editLog.summary=e.target.value);
+      editArea.appendChild(ta);
+
+      editArea.appendChild(Select(state.editLog.skin||"ok",
+        [["ok","無異常"],["prev","異常如前次"],["new","有異常"]],
+        v=>{state.editLog.skin=v;render();}));
+
+      if(state.editLog.skin==="new"||state.editLog.skin==="prev"){
+        const sn=h("input",{type:"text",value:state.editLog.skinNote||"",
+          placeholder:"異常說明",
+          style:{border:`1px solid ${C.warn}`,borderRadius:7,padding:"8px 10px",
+            fontSize:16,boxSizing:"border-box",width:"100%",fontFamily:"inherit"}});
+        sn.addEventListener("input",e=>state.editLog.skinNote=e.target.value);
+        editArea.appendChild(sn);
+      }
+
+      const noteIn=h("input",{type:"text",value:state.editLog.note||"",
+        placeholder:"備註（選填）",
+        style:{border:`1px solid ${C.border}`,borderRadius:7,padding:"8px 10px",
+          fontSize:16,boxSizing:"border-box",width:"100%",fontFamily:"inherit"}});
+      noteIn.addEventListener("input",e=>state.editLog.note=e.target.value);
+      editArea.appendChild(noteIn);
+
+      const btnRow=h("div",{style:{display:"flex",gap:8,flexWrap:"wrap"}});
+      btnRow.appendChild(Btn("💾 儲存",saveEditLog,{disabled:state.editBusy,color:"ok"}));
+      if(isAdmin)btnRow.appendChild(Btn("🗑️ 刪除",()=>deleteLog(log),{color:"danger",disabled:state.editBusy}));
+      btnRow.appendChild(Btn("取消",()=>setState({editLog:null,editMsg:""})));
+      editArea.appendChild(btnRow);
+
+      if(state.editMsg)editArea.appendChild(h("div",{
+        style:{fontSize:15,color:state.editMsg.startsWith("✓")?C.ok:C.danger}},state.editMsg));
+      card.appendChild(editArea);
+    }
+    wrap.appendChild(card);
+  });
+  return wrap;
+}
+
+// ── 異常 Tab ──
+function renderAbn(){
+  const isAdmin=state.me.role==="管理員";
+  const wrap=h("div",{style:{padding:"12px 12px 80px"}});
+  if(state.abnLoading){
+    wrap.appendChild(h("div",{style:{textAlign:"center",padding:40,color:C.textSub}},"載入中…"));
+    return wrap;
+  }
+  if(state.abnLogs.length===0){
+    wrap.appendChild(h("div",{style:{textAlign:"center",padding:48,color:C.ok,fontSize:18,lineHeight:2}},"✅ 目前無異常通報"));
+    return wrap;
+  }
+  state.abnLogs.forEach(log=>{
+    const card=h("div",{style:{background:C.card,borderRadius:10,marginBottom:8,
+      padding:"12px 14px",border:`1.5px solid ${C.accent}`}});
+    card.appendChild(h("div",{style:{display:"flex",justifyContent:"space-between",
+      alignItems:"flex-start",marginBottom:6}},
+      h("div",null,
+        h("div",{style:{fontSize:17,fontWeight:700,color:C.text}},log.client),
+        h("div",{style:{fontSize:14,color:C.textSub,marginTop:2}},
+          dateDisp(log.date)+" "+log.time+"　"+log.worker)),
+      Tag(log.status,"warn")));
+    if(log.note)card.appendChild(h("div",{style:{fontSize:14,color:C.warn,marginBottom:6}},log.note));
+    if(log.skinNote)card.appendChild(h("div",{style:{fontSize:14,color:C.warn,marginBottom:6}},"⚠️ "+log.skinNote));
+    if(isAdmin)card.appendChild(Btn("✓ 解除異常",()=>clearAbn(log),{small:true,color:"ok"}));
+    wrap.appendChild(card);
+  });
+  return wrap;
+}
+
+// ── 漏填 Tab ──
+function renderMissing(){
+  const wrap=h("div",{style:{padding:"12px 12px 80px"}});
+  wrap.appendChild(h("div",{style:{display:"flex",justifyContent:"space-between",
+    alignItems:"center",marginBottom:12}},
+    h("div",{style:{fontSize:15,color:C.textSub}},
+      state.missingWeek?"查詢週："+state.missingWeek:"查詢上一週"),
+    Btn("🔄 重新查詢",loadMissing,{disabled:state.missingLoading})));
+
+  if(state.missingLoading){
+    wrap.appendChild(h("div",{style:{textAlign:"center",padding:40,color:C.textSub}},"查詢中…"));
+    return wrap;
+  }
+  if(state.missing.length===0&&state.missingWeek){
+    wrap.appendChild(h("div",{style:{textAlign:"center",padding:48,color:C.ok,fontSize:18,lineHeight:2}},"✅ 本週無漏填"));
+    return wrap;
+  }
+  if(state.missing.length===0){
+    wrap.appendChild(h("div",{style:{textAlign:"center",padding:48,color:C.textSub,fontSize:16}},"點「重新查詢」開始查"));
+    return wrap;
+  }
+  wrap.appendChild(h("div",{style:{fontSize:14,color:C.warn,marginBottom:10}},"共 "+state.missing.length+" 筆未填"));
+  state.missing.forEach((m,i)=>{
+    wrap.appendChild(h("div",{style:{background:C.card,borderRadius:8,marginBottom:6,
+      padding:"10px 12px",border:`1px solid ${C.border}`}},
+      h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center"}},
+        h("div",null,
+          h("span",{style:{fontSize:16,fontWeight:700,color:C.text}},m.empName||m.empId),
+          h("span",{style:{fontSize:13,color:C.textSub,marginLeft:8}},m.month+"/"+m.day+" "+m.time)),
+        h("span",{style:{fontSize:15,color:C.warn}},m.client))));
+  });
+  return wrap;
+}
+
+// ── 名單 Tab ──
+function renderStaff(){
+  const isAdmin=state.me.role==="管理員";
+  const wrap=h("div",{style:{padding:"12px 12px 80px"}});
+
+  // 子 tab
+  const subTabs=h("div",{style:{display:"flex",gap:8,marginBottom:12}});
+  ["staff","cases"].forEach(k=>{
+    const active=state.staffTab===k;
+    const label=k==="staff"?"👤 員工（"+state.staffList.length+"）":"🏠 個案（"+state.caseList.length+"）";
+    subTabs.appendChild(h("button",{
+      onclick:()=>setState({staffTab:k}),
+      style:{flex:1,padding:10,border:`1px solid ${active?C.primary:C.border}`,
+        borderRadius:8,background:active?C.primary:C.card,
+        color:active?"white":C.textSub,fontSize:15,fontWeight:active?700:500,
+        cursor:"pointer",fontFamily:"inherit"}
+    },label));
+  });
+  wrap.appendChild(subTabs);
+
+  if(state.staffLoading){
+    wrap.appendChild(h("div",{style:{textAlign:"center",padding:30,color:C.textSub}},"載入中…"));
+    return wrap;
+  }
+
+  if(state.staffTab==="staff"){
+    if(isAdmin)wrap.appendChild(h("div",{style:{marginBottom:10}},
+      Btn("＋ 新增員工",()=>setState({showStaffForm:true,
+        staffForm:{rowNum:0,empId:"",name:"",tribe:"",status:"在職",empRole:"照服員",remark:""},
+        staffFormMsg:""}))));
+
+    state.staffList.forEach(s=>{
+      wrap.appendChild(h("div",{style:{background:C.card,borderRadius:8,marginBottom:6,
+        padding:"10px 12px",border:`1px solid ${C.border}`}},
+        h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center"}},
+          h("div",null,
+            h("span",{style:{fontSize:16,fontWeight:700,color:C.text}},s.name),
+            h("span",{style:{fontSize:13,color:C.textSub,marginLeft:8}},s.empId),
+            h("span",{style:{fontSize:13,color:C.primary,marginLeft:6}},s.role)),
+          h("div",{style:{display:"flex",gap:6,alignItems:"center"}},
+            Tag(s.status,s.status==="在職"?"ok":"danger"),
+            isAdmin&&Btn("修改",()=>setState({showStaffForm:true,
+              staffForm:{rowNum:s.row,empId:s.empId,name:s.name,tribe:s.tribe,
+                status:s.status,empRole:s.role,remark:s.remark},staffFormMsg:""}),{small:true})))));
+    });
+
+    // 員工表單 Modal
+    if(state.showStaffForm){
+      const modal=h("div",{style:{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",
+        zIndex:50,display:"flex",alignItems:"center",justifyContent:"center",padding:16}});
+      const box=h("div",{style:{background:C.card,borderRadius:12,padding:20,
+        width:"100%",maxWidth:480,maxHeight:"90vh",overflowY:"auto"}});
+      box.appendChild(h("div",{style:{fontSize:19,fontWeight:700,marginBottom:16}},
+        state.staffForm.rowNum?"修改員工":"新增員工"));
+
+      const addField=(label,key,placeholder,type)=>{
+        const row=h("div",{style:{marginBottom:10}});
+        row.appendChild(h("div",{style:{fontSize:13,color:C.textSub,marginBottom:4}},label));
+        if(type==="select-status"){
+          row.appendChild(Select(state.staffForm[key],[["在職","在職"],["離職","離職"],["留停","留停"]],
+            v=>{state.staffForm[key]=v;}));
+        }else if(type==="select-role"){
+          row.appendChild(Select(state.staffForm[key],[["照服員","照服員"],["督導","督導"],["管理員","管理員"],["行政","行政"]],
+            v=>{state.staffForm[key]=v;}));
+        }else{
+          const inp=h("input",{type:"text",value:state.staffForm[key]||"",placeholder:placeholder||"",
+            style:{width:"100%",border:`1px solid ${C.border}`,borderRadius:8,
+              padding:"9px 12px",fontSize:16,fontFamily:"inherit",boxSizing:"border-box"}});
+          inp.addEventListener("input",e=>{state.staffForm[key]=e.target.value;});
+          row.appendChild(inp);
+        }
+        box.appendChild(row);
+      };
+      addField("員工編號","empId","");
+      addField("姓名","name","");
+      addField("族群","tribe","");
+      addField("在職狀態","status","","select-status");
+      addField("角色","empRole","","select-role");
+      addField("備註","remark","");
+
+      if(state.staffFormMsg)box.appendChild(h("div",{style:{fontSize:15,
+        color:state.staffFormMsg.startsWith("✓")?C.ok:C.danger,marginBottom:8}},state.staffFormMsg));
+
+      const btnRow=h("div",{style:{display:"flex",gap:8}});
+      btnRow.appendChild(Btn("儲存",saveStaff,{disabled:state.editBusy}));
+      btnRow.appendChild(Btn("取消",()=>setState({showStaffForm:false})));
+      box.appendChild(btnRow);
+      modal.appendChild(box);
+      wrap.appendChild(modal);
+    }
+  }
+
+  if(state.staffTab==="cases"){
+    if(isAdmin)wrap.appendChild(h("div",{style:{marginBottom:10}},
+      Btn("＋ 新增個案",()=>setState({showCaseForm:true,
+        caseForm:{rowNum:0,caseId:"",name:"",supervisor:"",mainWorker:"",baCodes:"",cStatus:"服務中"},
+        caseFormMsg:""}))));
+
+    state.caseList.forEach(c=>{
+      wrap.appendChild(h("div",{style:{background:C.card,borderRadius:8,marginBottom:6,
+        padding:"10px 12px",border:`1px solid ${C.border}`}},
+        h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}},
+          h("div",null,
+            h("div",{style:{fontSize:16,fontWeight:700,color:C.text}},c.name),
+            h("div",{style:{fontSize:13,color:C.textSub,marginTop:2}},
+              "督導："+(c.supervisor||"—")+"　主責："+(c.mainWorker||"—"))),
+          h("div",{style:{display:"flex",gap:6,alignItems:"center"}},
+            Tag(c.status,c.status==="服務中"?"ok":"danger"),
+            isAdmin&&Btn("修改",()=>setState({showCaseForm:true,
+              caseForm:{rowNum:c.row,caseId:c.caseId,name:c.name,supervisor:c.supervisor,
+                mainWorker:c.mainWorker,baCodes:c.baCodes,cStatus:c.status},caseFormMsg:""}),{small:true}))),
+        c.baCodes&&h("div",{style:{fontSize:13,color:C.primary,marginTop:4}},c.baCodes)));
+    });
+
+    // 個案表單 Modal
+    if(state.showCaseForm){
+      const modal=h("div",{style:{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",
+        zIndex:50,display:"flex",alignItems:"center",justifyContent:"center",padding:16}});
+      const box=h("div",{style:{background:C.card,borderRadius:12,padding:20,
+        width:"100%",maxWidth:480,maxHeight:"90vh",overflowY:"auto"}});
+      box.appendChild(h("div",{style:{fontSize:19,fontWeight:700,marginBottom:16}},
+        state.caseForm.rowNum?"修改個案":"新增個案"));
+
+      const addCaseField=(label,key,placeholder)=>{
+        const row=h("div",{style:{marginBottom:10}});
+        row.appendChild(h("div",{style:{fontSize:13,color:C.textSub,marginBottom:4}},label));
+        if(key==="cStatus"){
+          row.appendChild(Select(state.caseForm[key],
+            [["服務中","服務中"],["暫停","暫停"],["結案","結案"]],
+            v=>{state.caseForm[key]=v;}));
+        }else{
+          const inp=h("input",{type:"text",value:state.caseForm[key]||"",placeholder:placeholder||"",
+            style:{width:"100%",border:`1px solid ${C.border}`,borderRadius:8,
+              padding:"9px 12px",fontSize:16,fontFamily:"inherit",boxSizing:"border-box"}});
+          inp.addEventListener("input",e=>{state.caseForm[key]=e.target.value;});
+          row.appendChild(inp);
+        }
+        box.appendChild(row);
+      };
+      addCaseField("案號（選填）","caseId");
+      addCaseField("姓名","name");
+      addCaseField("主責督導","supervisor");
+      addCaseField("主責照服員","mainWorker");
+      addCaseField("常用BA碼","baCodes");
+      addCaseField("服務狀態","cStatus");
+
+      if(state.caseFormMsg)box.appendChild(h("div",{style:{fontSize:15,
+        color:state.caseFormMsg.startsWith("✓")?C.ok:C.danger,marginBottom:8}},state.caseFormMsg));
+
+      const btnRow=h("div",{style:{display:"flex",gap:8}});
+      btnRow.appendChild(Btn("儲存",saveCase,{disabled:state.editBusy}));
+      btnRow.appendChild(Btn("取消",()=>setState({showCaseForm:false})));
+      box.appendChild(btnRow);
+      modal.appendChild(box);
+      wrap.appendChild(modal);
+    }
+  }
+
+  return wrap;
+}
+
+// ── 渲染 ──
+function render(){
+  const root=document.getElementById("root");
+  root.innerHTML="";
+  root.appendChild(state.screen==="login"?renderLogin():renderMain());
+}
+
+render();
+</script>
+</body>
+</html>
