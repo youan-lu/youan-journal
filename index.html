@@ -778,7 +778,7 @@ function App() {
       React.createElement("img",{src:signature,alt:"簽名",style:{maxWidth:240,maxHeight:80,display:"block",margin:"0 auto"}})),
     React.createElement("div",{style:{width:72,height:72,borderRadius:"50%",background:C.okLight,display:"flex",alignItems:"center",justifyContent:"center",fontSize:44,marginBottom:20}},"✓"),
     React.createElement("div",{style:{fontSize:27,fontWeight:700,color:C.text,marginBottom:8}},"已送出"),
-    React.createElement("div",{style:{fontSize:19,color:C.textSub,marginBottom:4}},session.client,"　",session.time),
+    React.createElement("div",{style:{fontSize:19,color:C.textSub,marginBottom:4}},session&&session.client,"　",session&&session.time),
     React.createElement("div",{style:{fontSize:18,color:C.textSub,marginBottom:8}},today),
     React.createElement("div",{style:{fontSize:17,color:C.ok,marginBottom:32,textAlign:"center",lineHeight:1.5}},"補填期（下月2日）前",React.createElement("br"),"都可回班次清單點「已送出·可修改」修改"),
     React.createElement("button",{onClick:()=>setScreen("list"),style:{background:C.primary,color:"white",border:"none",borderRadius:10,padding:"12px 32px",fontSize:20,fontWeight:600,cursor:"pointer"}},"回到班次清單"));
