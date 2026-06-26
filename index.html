@@ -13,7 +13,7 @@
   #loading { text-align:center; padding:80px 20px; color:#6E6A5F; font-size:18px; }
 </style>
 <script>
-// Service Worker 註冊（v34 離線功能）
+// Service Worker 註冊（v35 離線功能）
 if('serviceWorker' in navigator){
   navigator.serviceWorker.register('/youan-journal/sw.js',{scope:'/youan-journal/'})
     .then(()=>console.log('[SW] 已註冊'))
@@ -366,7 +366,7 @@ async function callAPI(action, params = {}) {
 
 
 // ════════════════════════════════════════════
-// 佑安離線功能模組 (v34)
+// 佑安離線功能模組 (v35)
 // ════════════════════════════════════════════
 const CACHE_PREFIX = 'youan_';
 const SCHEDULE_KEY_PREFIX = CACHE_PREFIX + 'schedule_'; // key = prefix + empId + '_' + month + '_' + day
@@ -784,7 +784,7 @@ function App() {
     React.createElement("div",{style:{background:C.primary,color:"white",padding:"16px 16px 14px",position:"sticky",top:0,zIndex:10}},
       React.createElement("div",{style:{display:"flex",alignItems:"center",justifyContent:"center",gap:10,marginBottom:6}},
         React.createElement(YouanLogo,{size:34,color:C.bear}),
-        React.createElement("div",{style:{fontSize:20,fontWeight:700,letterSpacing:.5,lineHeight:1.3}},"佑安服務日誌線上填寫系統 v34")),
+        React.createElement("div",{style:{fontSize:20,fontWeight:700,letterSpacing:.5,lineHeight:1.3}},"佑安服務日誌線上填寫系統 v35")),
       React.createElement("div",{style:{fontSize:21,opacity:.85,marginTop:6,textAlign:"center"}},today,"　現在 ",NOW_STR)),
     // 離線佇列提示橫幅
     (()=>{
