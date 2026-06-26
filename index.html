@@ -12,6 +12,14 @@
   input, select, textarea, button { font-family: 'Noto Sans TC', sans-serif; }
   #loading { text-align:center; padding:80px 20px; color:#6E6A5F; font-size:18px; }
 </style>
+<script>
+// Service Worker 註冊（v33 離線功能）
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('/youan-journal/sw.js',{scope:'/youan-journal/'})
+    .then(()=>console.log('[SW] 已註冊'))
+    .catch(e=>console.warn('[SW] 註冊失敗',e));
+}
+</script>
 </head>
 <body>
 <div id="root"><div id="loading">載入中…</div></div>
@@ -356,6 +364,87 @@ async function callAPI(action, params = {}) {
   return await res.json();
 }
 
+
+// ════════════════════════════════════════════
+// 佑安離線功能模組 (v33)
+// ════════════════════════════════════════════
+const CACHE_PREFIX = 'youan_';
+const SCHEDULE_KEY_PREFIX = CACHE_PREFIX + 'schedule_'; // key = prefix + empId + '_' + month + '_' + day
+const PHRASES_KEY_PREFIX  = CACHE_PREFIX + 'phrases_';  // key = prefix + empId
+const PENDING_KEY = CACHE_PREFIX + 'pending_queue';     // 待傳送佇列
+
+// ── 班表快取 ──
+function cacheSchedule(empId, month, day, data){
+  try{ localStorage.setItem(SCHEDULE_KEY_PREFIX+empId+'_'+month+'_'+day, JSON.stringify({ts:Date.now(),data})); }catch(e){}
+}
+function getCachedSchedule(empId, month, day){
+  try{
+    const raw = localStorage.getItem(SCHEDULE_KEY_PREFIX+empId+'_'+month+'_'+day);
+    if(!raw) return null;
+    const obj = JSON.parse(raw);
+    // 7天有效
+    if(Date.now() - obj.ts > 7*24*3600*1000) return null;
+    return obj.data;
+  }catch(e){ return null; }
+}
+function cachePhrases(empId, data){
+  try{ localStorage.setItem(PHRASES_KEY_PREFIX+empId, JSON.stringify({ts:Date.now(),data})); }catch(e){}
+}
+function getCachedPhrases(empId){
+  try{
+    const raw = localStorage.getItem(PHRASES_KEY_PREFIX+empId);
+    if(!raw) return null;
+    const obj = JSON.parse(raw);
+    if(Date.now() - obj.ts > 24*3600*1000) return null; // 1天有效
+    return obj.data;
+  }catch(e){ return null; }
+}
+
+// ── 待傳送佇列 ──
+function loadQueue(){
+  try{ return JSON.parse(localStorage.getItem(PENDING_KEY)||'[]'); }catch(e){ return []; }
+}
+function saveQueue(q){
+  try{ localStorage.setItem(PENDING_KEY, JSON.stringify(q)); }catch(e){}
+}
+// 加入佇列（狀態：pending / sent / failed）
+function enqueueSubmit(payload){
+  const q = loadQueue();
+  const id = Date.now()+'_'+Math.random().toString(36).slice(2,6);
+  q.push({id, payload, status:'pending', ts: Date.now(), sentAt:null, failMsg:null});
+  saveQueue(q);
+  return id;
+}
+function updateQueueItem(id, update){
+  const q = loadQueue().map(item => item.id===id ? {...item,...update} : item);
+  saveQueue(q);
+}
+// 取得某 session 對應的佇列項目（用 empId+日期+個案比對）
+function findQueueItem(empId, serviceDate, client){
+  return loadQueue().find(i => i.payload.empId===empId && i.payload.serviceDate===serviceDate && i.payload.client===client);
+}
+
+// ── 嘗試補傳佇列（背景執行） ──
+async function flushQueue(setQueueVersion){
+  const q = loadQueue();
+  const pending = q.filter(i => i.status==='pending' || i.status==='failed');
+  if(!pending.length) return;
+  for(const item of pending){
+    try{
+      const res = await fetch(API,{method:'POST',body:JSON.stringify({action:'submit',data:JSON.stringify(item.payload)})}).then(r=>r.json()).catch(()=>null);
+      if(res && res.ok){
+        updateQueueItem(item.id,{status:'sent',sentAt:Date.now(),failMsg:null});
+      } else {
+        updateQueueItem(item.id,{status:'failed',failMsg:(res&&res.msg)||'網路錯誤'});
+      }
+    }catch(e){
+      updateQueueItem(item.id,{status:'failed',failMsg:'網路錯誤'});
+    }
+    // 讓 React 重新讀取佇列
+    if(setQueueVersion) setQueueVersion(v=>v+1);
+  }
+}
+
 const _now = new Date();
 const NOW_HOUR = _now.getHours() + _now.getMinutes() / 60;
 const NOW_STR = `${String(_now.getHours()).padStart(2,"0")}:${String(_now.getMinutes()).padStart(2,"0")}`;
@@ -502,6 +591,7 @@ function App() {
   const [savedData,setSavedData] = useState({});
   const [showChangePw,setShowChangePw] = useState(false);
   const [uploadMsg,setUploadMsg] = useState("");
+  const [queueVersion,setQueueVersion] = useState(0); // 觸發重繪佇列狀態
   const [uploading,setUploading] = useState(false);
   const [oldPw,setOldPw] = useState("");
   const [newPw,setNewPw] = useState("");
@@ -515,6 +605,19 @@ function App() {
   const today=`${_now.getFullYear()-1911}年${_now.getMonth()+1}月${_now.getDate()}日（${_wd}）`;
   const user=me?`${me.name}　${me.empId}`:"";
   const session=activeIdx!=null?dayList[activeIdx]:null;
+
+  // 網路恢復時自動補傳佇列
+  React.useEffect(()=>{
+    const handler=()=>{ flushQueue(setQueueVersion); };
+    window.addEventListener('online', handler);
+    // 頁面可見時也嘗試補傳
+    const visHandler=()=>{ if(document.visibilityState==='visible') flushQueue(setQueueVersion); };
+    document.addEventListener('visibilitychange', visHandler);
+    return ()=>{
+      window.removeEventListener('online', handler);
+      document.removeEventListener('visibilitychange', visHandler);
+    };
+  },[]);
 
   const doLogin=async()=>{
     setLoginErr(""); setBusy(true);
@@ -535,22 +638,46 @@ function App() {
   };
 
   const loadDay=async(empId,m,d)=>{
-    setLoadingDay(true); setLoadError(false); setSubmitted([]); setSavedData({});
+    setLoadError(false); setSavedData({});
+    // 先顯示快取（秒開）
+    const cachedSched = getCachedSchedule(empId,m,d);
+    const cachedPhr   = getCachedPhrases(empId);
+    if(cachedSched){
+      const days=cachedSched.day||[];
+      setDayList(days);
+      const subIdx=[]; const abnIdx={};
+      days.forEach((s,i)=>{ if(s.done)subIdx.push(i); if(s.abnormal)abnIdx[i]=true; });
+      setSubmitted(subIdx); setAbnormalMap(abnIdx);
+      if(cachedPhr){
+        setPhrases(cachedPhr.phrases||{});
+        setByCode(cachedPhr.byCode||{});
+        setLastSkin(cachedPhr.lastSkin||{});
+      }
+      setLoadingDay(false); // 快取已顯示，取消 loading
+    } else {
+      setLoadingDay(true); setSubmitted([]);
+    }
+    // 背景向後端拿最新資料
     try{
       const [dayR,phR]=await Promise.all([callAPI("getDay",{empId,month:m,day:d}),callAPI("getPhrases",{empId})]);
       const days=dayR.ok?dayR.day:[];
       setDayList(days);
-      // 讀回已送出狀態
-      const subIdx=[];
-      const abnIdx={};
+      const subIdx=[]; const abnIdx={};
       days.forEach((s,i)=>{ if(s.done)subIdx.push(i); if(s.abnormal)abnIdx[i]=true; });
-      setSubmitted(subIdx);
-      setAbnormalMap(abnIdx);
+      setSubmitted(subIdx); setAbnormalMap(abnIdx);
       setPhrases(phR.ok?phR.phrases:{});
       setByCode(phR.ok?phR.byCode||{}:{});
       setLastSkin(phR.ok?phR.lastSkin||{}:{});
-    }catch(e){setDayList([]);setLoadError(true);}
+      // 存入快取
+      if(dayR.ok) cacheSchedule(empId,m,d,{day:days});
+      if(phR.ok)  cachePhrases(empId,{phrases:phR.phrases||{},byCode:phR.byCode||{},lastSkin:phR.lastSkin||{}});
+    }catch(e){
+      if(!cachedSched){ setDayList([]); setLoadError(true); }
+      // 有快取就繼續用，不清空
+    }
     setLoadingDay(false);
+    // 嘗試補傳佇列
+    flushQueue(setQueueVersion);
   };
 
   const changeDate=(m,d)=>{setPickMonth(m);setPickDay(d);if(me)loadDay(me.empId,m,d);};
@@ -597,19 +724,31 @@ function App() {
     setBusy(true);
     const records=codesInSession.map(c=>({code:c.code,summary:codeValues[c.code]||"",extra:!!c.extra}));
     const payload={empId:me.empId,empName:me.name,serviceDate:`${_now.getFullYear()-1911}/${pickMonth}/${pickDay}`,client:session.client,time:session.time,bantype:session.bantype,skin,skinNote:(skin==="new"||skin==="prev")?skinNote:"",records,signature,abnormal:isAbn};
+    // 先存入佇列（id 用來追蹤狀態）
+    const qId = enqueueSubmit(payload);
+    setQueueVersion(v=>v+1); // 觸發重繪
+    setSavedData(p=>({...p,[activeIdx]:{codeValues:{...codeValues},skin,skinNote,extraCodes:[...extraCodes]}}));
+    setSubmitted(prev=>prev.includes(activeIdx)?prev:[...prev,activeIdx]);
+    setScreen("list");
+    setBusy(false);
+    // 背景嘗試送出
     try{
       const submitRes=await fetch(API,{method:"POST",body:JSON.stringify({action:"submit",data:JSON.stringify(payload)})}).then(r=>r.json()).catch(()=>null);
-      if(submitRes&&!submitRes.ok){alert("送出失敗："+submitRes.msg);setBusy(false);return;}
-      for(const c of codesInSession){
-        if(savedTemplates[c.code]&&codeValues[c.code]){
-          await fetch(API,{method:"POST",body:JSON.stringify({action:"savePhrase",empId:me.empId,empName:me.name,client:session.client,code:c.code,phrase:codeValues[c.code]})});
+      if(submitRes&&submitRes.ok){
+        updateQueueItem(qId,{status:'sent',sentAt:Date.now()});
+        // 儲存範本（非同步）
+        for(const c of codesInSession){
+          if(savedTemplates[c.code]&&codeValues[c.code]){
+            fetch(API,{method:"POST",body:JSON.stringify({action:"savePhrase",empId:me.empId,empName:me.name,client:session.client,code:c.code,phrase:codeValues[c.code]})}).catch(()=>{});
+          }
         }
+      } else {
+        updateQueueItem(qId,{status:'failed',failMsg:(submitRes&&submitRes.msg)||'伺服器錯誤'});
       }
-      setSavedData(p=>({...p,[activeIdx]:{codeValues:{...codeValues},skin,skinNote,extraCodes:[...extraCodes]}}));
-      setSubmitted(prev=>prev.includes(activeIdx)?prev:[...prev,activeIdx]);
-      setScreen("list");
-    }catch(e){alert("送出失敗，請檢查網路後再試一次");}
-    setBusy(false);
+    }catch(e){
+      updateQueueItem(qId,{status:'failed',failMsg:'網路錯誤，待補傳'});
+    }
+    setQueueVersion(v=>v+1);
   };
 
   const addExtra=c=>{
@@ -645,8 +784,20 @@ function App() {
     React.createElement("div",{style:{background:C.primary,color:"white",padding:"16px 16px 14px",position:"sticky",top:0,zIndex:10}},
       React.createElement("div",{style:{display:"flex",alignItems:"center",justifyContent:"center",gap:10,marginBottom:6}},
         React.createElement(YouanLogo,{size:34,color:C.bear}),
-        React.createElement("div",{style:{fontSize:20,fontWeight:700,letterSpacing:.5,lineHeight:1.3}},"佑安服務日誌線上填寫系統 v32")),
+        React.createElement("div",{style:{fontSize:20,fontWeight:700,letterSpacing:.5,lineHeight:1.3}},"佑安服務日誌線上填寫系統 v33")),
       React.createElement("div",{style:{fontSize:21,opacity:.85,marginTop:6,textAlign:"center"}},today,"　現在 ",NOW_STR)),
+    // 離線佇列提示橫幅
+    (()=>{
+      const q=loadQueue();
+      const pending=q.filter(i=>i.status==='pending').length;
+      const failed=q.filter(i=>i.status==='failed').length;
+      if(!pending&&!failed) return null;
+      return React.createElement("div",{style:{margin:"8px 14px 0",borderRadius:10,padding:"10px 14px",display:"flex",alignItems:"center",justifyContent:"space-between",
+        background:failed?"#FEF2F2":"#FFF8E1",border:`1.5px solid ${failed?"#EF4444":"#F59E0B"}`}},
+        React.createElement("div",{style:{fontSize:16,fontWeight:700,color:failed?"#DC2626":"#D97706"}},
+          failed?`🔴 ${failed} 筆傳送失敗，請點班次重試`:`🟡 ${pending} 筆待傳送中…`),
+        failed&&React.createElement("button",{onClick:()=>flushQueue(setQueueVersion),style:{background:"#EF4444",color:"white",border:"none",borderRadius:7,padding:"5px 12px",fontSize:15,fontWeight:700,cursor:"pointer"}},"全部重試"));
+    })(),
     // 員工資訊列
     React.createElement("div",{style:{margin:"12px 14px",background:C.card,borderRadius:10,padding:"12px 14px",display:"flex",justifyContent:"space-between",alignItems:"center",border:`1px solid ${C.border}`,flexWrap:"wrap",gap:8}},
       React.createElement("div",null,React.createElement("div",{style:{fontSize:24,fontWeight:700,color:C.text}},user)),
@@ -739,8 +890,37 @@ function App() {
             React.createElement("div",null,
               React.createElement("div",{style:{fontSize:20,color:C.textSub,marginBottom:3}},s.time,locked&&!done&&React.createElement("span",{style:{color:C.warn,marginLeft:6,whiteSpace:"nowrap"}},"· 尚未結束")),
               React.createElement("div",{style:{fontSize:21,fontWeight:700,color:C.text}},s.client)),
-            done?React.createElement("button",{onClick:()=>handleOpen(idx),style:{flexShrink:0,background:C.okLight,border:`1px solid ${C.ok}`,borderRadius:8,padding:"6px 12px",fontSize:16,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}},React.createElement("span",{style:{color:C.ok}},"✓ 已送出 · "),React.createElement("span",{style:{color:C.accent}},"可修改")):
-            React.createElement("button",{onClick:()=>handleOpen(idx),style:{flexShrink:0,background:locked?C.warnLight:C.primary,color:locked?C.warn:"white",border:locked?`1px solid ${C.warn}`:"none",borderRadius:8,padding:"6px 12px",fontSize:16,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}},locked?"可先編輯":"填寫")),
+            (()=>{
+              // 查佇列狀態
+              const qi=done?findQueueItem(me.empId,`${_now.getFullYear()-1911}/${pickMonth}/${pickDay}`,s.client):null;
+              const qs=qi?qi.status:null;
+              if(done){
+                if(qs==='sent'||qs===null){
+                  return React.createElement("button",{onClick:()=>handleOpen(idx),style:{flexShrink:0,background:C.okLight,border:`1px solid ${C.ok}`,borderRadius:8,padding:"6px 12px",fontSize:16,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}},
+                    React.createElement("span",{style:{color:C.ok}},"✅ 已送出 · "),React.createElement("span",{style:{color:C.accent}},"可修改"));
+                } else if(qs==='pending'){
+                  return React.createElement("button",{onClick:()=>handleOpen(idx),style:{flexShrink:0,background:"#FFF8E1",border:"1.5px solid #F59E0B",borderRadius:8,padding:"6px 12px",fontSize:16,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}},
+                    React.createElement("span",{style:{color:"#D97706"}},"🟡 待傳送"));
+                } else {
+                  return React.createElement("button",{onClick:async()=>{
+                    // 手動重試
+                    const q2=loadQueue();
+                    const item=q2.find(i=>i.id===qi.id);
+                    if(!item)return;
+                    updateQueueItem(qi.id,{status:'pending'});
+                    setQueueVersion(v=>v+1);
+                    try{
+                      const r=await fetch(API,{method:'POST',body:JSON.stringify({action:'submit',data:JSON.stringify(item.payload)})}).then(x=>x.json()).catch(()=>null);
+                      updateQueueItem(qi.id,r&&r.ok?{status:'sent',sentAt:Date.now()}:{status:'failed',failMsg:(r&&r.msg)||'網路錯誤'});
+                    }catch(e){updateQueueItem(qi.id,{status:'failed',failMsg:'網路錯誤'});}
+                    setQueueVersion(v=>v+1);
+                  },style:{flexShrink:0,background:"#FEF2F2",border:"1.5px solid #EF4444",borderRadius:8,padding:"6px 12px",fontSize:16,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}},
+                    React.createElement("span",{style:{color:"#DC2626"}},"🔴 傳送失敗 · "),React.createElement("span",{style:{color:C.accent}},"重試"));
+                }
+              } else {
+                return React.createElement("button",{onClick:()=>handleOpen(idx),style:{flexShrink:0,background:locked?C.warnLight:C.primary,color:locked?C.warn:"white",border:locked?`1px solid ${C.warn}`:"none",borderRadius:8,padding:"6px 12px",fontSize:16,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}},locked?"可先編輯":"填寫");
+              }
+            })()),
           React.createElement("div",{style:{padding:"8px 14px 10px",borderTop:`1px solid ${C.divider}`,background:"#FAF6EC",display:"flex",flexWrap:"wrap",gap:6}},s.codes.map((c,i)=>React.createElement(Tag,{key:i,code:c.code,name:c.name,qty:c.qty}))));
       })),
     React.createElement(FooterBar));
@@ -767,7 +947,7 @@ function App() {
         codesInSession.map((c,i)=>React.createElement(CodeBlock,{key:c.code+i,codeItem:c,extra:c.extra,fromLast:fromLastMap[c.code],chips:(()=>{const exact=phrases[`${session.client}_${c.code}`]||[];const all=byCode[c.code]||[];const seen=new Set(exact.map(p=>p.text));return[...exact.map(p=>({t:p.text,freq:p.count,personal:true})),...all.filter(p=>!seen.has(p.text)).map(p=>({t:p.text,freq:p.count,personal:false}))];})(),value:codeValues[c.code]||"",saved:savedTemplates[c.code],onChange:v=>{setCodeValues(p=>({...p,[c.code]:v}));setSavedTemplates(p=>({...p,[c.code]:false}));},onSaveTemplate:()=>setSavedTemplates(p=>({...p,[c.code]:true})),onRemove:()=>removeExtra(c.code)})),
         !allFilled&&React.createElement("div",{style:{background:C.warnLight,border:`1px solid #FCD34D`,borderRadius:8,padding:"10px 14px",fontSize:18,color:C.warn}},"⚠️ 尚有 ",codesInSession.filter(c=>!codeValues[c.code]?.trim()).length," 個項目未填寫")),
     React.createElement("div",{style:{position:"fixed",bottom:0,left:0,right:0,background:"white",borderTop:`1px solid ${C.border}`,padding:"12px 14px"}},
-      React.createElement("button",{onClick:handleSubmit,disabled:busy||!(allFilled&&(canSubmitNow()||abnormalMap[activeIdx])),style:{width:"100%",background:busy?C.ok:((allFilled&&(canSubmitNow()||abnormalMap[activeIdx]))?(abnormalMap[activeIdx]?C.warn:C.accent):C.border),color:busy?"white":((allFilled&&(canSubmitNow()||abnormalMap[activeIdx]))?"white":C.textSub),border:"none",borderRadius:10,padding:"14px",fontSize:21,fontWeight:700,cursor:(allFilled&&(canSubmitNow()||abnormalMap[activeIdx]))?"pointer":"default"}},busy?"✓ 已送出":abnormalMap[activeIdx]?(allFilled?"⚠️ 送出（含異常）　→":"請填寫所有項目"):(canSubmitNow()?(allFilled?"確認送出　→":"請填寫所有項目"):"🔒 班次結束後才能送出")))));
+      React.createElement("button",{onClick:handleSubmit,disabled:busy||!(allFilled&&(canSubmitNow()||abnormalMap[activeIdx])),style:{width:"100%",background:busy?C.ok:((allFilled&&(canSubmitNow()||abnormalMap[activeIdx]))?(abnormalMap[activeIdx]?C.warn:C.accent):C.border),color:busy?"white":((allFilled&&(canSubmitNow()||abnormalMap[activeIdx]))?"white":C.textSub),border:"none",borderRadius:10,padding:"14px",fontSize:21,fontWeight:700,cursor:(allFilled&&(canSubmitNow()||abnormalMap[activeIdx]))?"pointer":"default"}},busy?"處理中…":abnormalMap[activeIdx]?(allFilled?"⚠️ 送出（含異常）　→":"請填寫所有項目"):(canSubmitNow()?(allFilled?"確認送出　→":"請填寫所有項目"):"🔒 班次結束後才能送出")))));
 
   // ── 送出完成 ──
   return React.createElement("div",{style:{minHeight:"100vh",background:C.bg,fontFamily:"'Noto Sans TC', sans-serif",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24}},
