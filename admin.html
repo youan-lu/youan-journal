@@ -865,6 +865,12 @@ function MissingTab({me}){
       e("input",{type:"number",value:d2,onChange:ev=>setD2(+ev.target.value),style:inp})),
     // 查詢鈕
     e("div",{style:{marginBottom:14}}, e(AdminBtn,{onClick:load,disabled:loading},loading?"查詢中…":"🔍 查詢漏填")),
+    // 批次補填（有資料才顯示，固定在上方不用捲到底）
+    !loading && missing.length>0 && e("div",{style:{marginBottom:14}},
+      e("button",{onClick:fillAll,disabled:filling,
+        style:{width:"100%",background:filling?C.ok:C.warn,color:"white",border:"none",borderRadius:10,padding:"14px",fontSize:18,fontWeight:700,cursor:filling?"default":"pointer",fontFamily:"inherit"}},
+        filling?"批次補填中…請稍候":("📝 批次補填全部 "+missing.length+" 筆")),
+      e("div",{style:{fontSize:13,color:C.textSub,textAlign:"center",marginTop:8,lineHeight:1.6}},"服務概況自動帶入上次同 BA 碼內容，簽名帶原照服員，狀態標「管理員補登」")),
 
     loading && e("div",{style:{textAlign:"center",padding:50,color:C.textSub,fontSize:17}},"查詢中…"),
     !loading && loaded && missing.length===0 && e("div",{style:{textAlign:"center",padding:60,color:C.ok,fontSize:19,lineHeight:1.8}},"✅",e("br"),"此範圍無漏填"),
@@ -883,13 +889,7 @@ function MissingTab({me}){
           e("button",{onClick:()=>fillOne(m),disabled:busy||filling,
             style:{background:busy?C.ok:C.primary,color:"white",border:"none",borderRadius:8,padding:"8px 18px",fontSize:15,fontWeight:700,cursor:(busy||filling)?"default":"pointer",fontFamily:"inherit"}},
             busy?"補填中…":"✏️ 補填")));
-    }),
-    // 底部批次補填
-    missing.length>0 && e("div",{style:{marginTop:16,paddingTop:14,borderTop:`1px solid ${C.border}`}},
-      e("button",{onClick:fillAll,disabled:filling,
-        style:{width:"100%",background:filling?C.ok:C.warn,color:"white",border:"none",borderRadius:10,padding:"14px",fontSize:18,fontWeight:700,cursor:filling?"default":"pointer",fontFamily:"inherit"}},
-        filling?"批次補填中…請稍候":("📝 批次補填全部 "+missing.length+" 筆")),
-      e("div",{style:{fontSize:13,color:C.textSub,textAlign:"center",marginTop:8,lineHeight:1.6}},"服務概況自動帶入該個案上次同 BA 碼內容，狀態標「管理員補登」")));
+    }));
 }
 
 // 名單 Tab
