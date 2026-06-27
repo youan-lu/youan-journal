@@ -568,19 +568,44 @@ function LogsTab({me}){
   const [editData,setEditData] = useState({});
   const [editBusy,setEditBusy] = useState(false);
   const [editMsg,setEditMsg] = useState("");
+  const [staffOpts,setStaffOpts] = useState([]);   // 在職員工（下拉用）
+  const [caseOpts,setCaseOpts] = useState([]);     // 服務中個案（下拉用）
+
+  // 載入下拉選單來源：在職員工 + 服務中個案
+  async function loadOpts(){
+    try{
+      const rs = await adminAPI("adminGetStaff",{role:me.role,empId:me.empId});
+      if(rs.ok){
+        const list = (rs.staff||[]).filter(s=>String(s.status||"").trim()==="在職");
+        setStaffOpts(list.map(s=>s.name).filter(Boolean));
+      }
+    }catch(ex){}
+    try{
+      const rc = await adminAPI("adminGetCases",{role:me.role,empId:me.empId});
+      if(rc.ok){
+        const list = (rc.cases||[]).filter(c=>String(c.status||"").trim()==="服務中");
+        setCaseOpts(list.map(c=>c.name).filter(Boolean));
+      }
+    }catch(ex){}
+  }
 
   async function load(){
     setLoading(true);
     try{
+      // 日期選擇器值為 YYYY-MM-DD，轉成後端比對用的 M/D
+      let dmd = "";
+      if(fDate){ const p=fDate.split("-"); if(p.length===3) dmd = parseInt(p[1])+"/"+parseInt(p[2]); }
       const r = await adminAPI("adminGetLogs",{role:me.role,empId:me.empId,
-        filterDate:fDate,filterWorker:fWorker,filterClient:fClient,
+        date:dmd, worker:fWorker, client:fClient,
+        filterDate:dmd, filterWorker:fWorker, filterClient:fClient,
+        supervisor:me.role==="督導"?me.name:"",
         filterSupervisor:me.role==="督導"?me.name:""});
       setLogs(r.ok?(r.logs||[]):[]); setLoaded(true);
     }catch(ex){}
     setLoading(false);
   }
 
-  React.useEffect(()=>{ load(); }, []);
+  React.useEffect(()=>{ load(); loadOpts(); }, []);
 
   function openEdit(log){
     if(editRow===log.row){ setEditRow(null); return; }
@@ -618,16 +643,20 @@ function LogsTab({me}){
       e("div",{style:{display:"flex",flexWrap:"wrap",gap:10}},
         e("div",{style:{flex:"1 1 90px"}},
           e("div",{style:{fontSize:14,color:C.textSub,marginBottom:5}},"日期"),
-          e("input",{value:fDate,onChange:ev=>setFDate(ev.target.value),placeholder:"6/22",
-            style:{width:"100%",border:`1.5px solid ${C.border}`,borderRadius:9,padding:"11px 12px",fontSize:18,fontFamily:"inherit",boxSizing:"border-box",outline:"none"}})),
+          e("input",{type:"date",value:fDate,onChange:ev=>setFDate(ev.target.value),
+            style:{width:"100%",border:`1.5px solid ${C.border}`,borderRadius:9,padding:"11px 12px",fontSize:17,fontFamily:"inherit",boxSizing:"border-box",outline:"none",background:"white"}})),
         e("div",{style:{flex:"1 1 90px"}},
           e("div",{style:{fontSize:14,color:C.textSub,marginBottom:5}},"照服員"),
-          e("input",{value:fWorker,onChange:ev=>setFWorker(ev.target.value),placeholder:"姓名",
-            style:{width:"100%",border:`1.5px solid ${C.border}`,borderRadius:9,padding:"11px 12px",fontSize:18,fontFamily:"inherit",boxSizing:"border-box",outline:"none"}})),
+          e("select",{value:fWorker,onChange:ev=>setFWorker(ev.target.value),
+            style:{width:"100%",border:`1.5px solid ${C.border}`,borderRadius:9,padding:"11px 12px",fontSize:17,fontFamily:"inherit",boxSizing:"border-box",outline:"none",background:"white"}},
+            e("option",{value:""},"全部"),
+            staffOpts.map((n,i)=>e("option",{key:i,value:n},n)))),
         e("div",{style:{flex:"1 1 90px"}},
           e("div",{style:{fontSize:14,color:C.textSub,marginBottom:5}},"個案"),
-          e("input",{value:fClient,onChange:ev=>setFClient(ev.target.value),placeholder:"姓名",
-            style:{width:"100%",border:`1.5px solid ${C.border}`,borderRadius:9,padding:"11px 12px",fontSize:18,fontFamily:"inherit",boxSizing:"border-box",outline:"none"}}))),
+          e("select",{value:fClient,onChange:ev=>setFClient(ev.target.value),
+            style:{width:"100%",border:`1.5px solid ${C.border}`,borderRadius:9,padding:"11px 12px",fontSize:17,fontFamily:"inherit",boxSizing:"border-box",outline:"none",background:"white"}},
+            e("option",{value:""},"全部"),
+            caseOpts.map((n,i)=>e("option",{key:i,value:n},n))))),
       e("div",{style:{marginTop:12}},
         e("button",{onClick:load,disabled:loading,style:{width:"100%",background:loading?C.ok:C.primary,color:"white",border:"none",borderRadius:10,padding:"12px",fontSize:18,fontWeight:700,cursor:loading?"default":"pointer",fontFamily:"inherit"}},loading?"查詢中…":"🔍 查詢"))),
 
@@ -739,6 +768,43 @@ function MissingTab({me}){
   const [m2,setM2] = useState(_t.getMonth()+1);
   const [d2,setD2] = useState(_t.getDate());
   const [monthSel,setMonthSel] = useState(_t.getMonth()+1);
+  const [filling,setFilling] = useState(false);     // 批次補填中
+  const [fillingKey,setFillingKey] = useState("");  // 單筆補填中的 key
+  const [fillMsg,setFillMsg] = useState("");
+
+  // 補填單筆
+  async function fillOne(m){
+    const key = m.month+"/"+m.day+"|"+m.empId+"|"+m.client+"|"+(m.time||"");
+    setFillingKey(key); setFillMsg("");
+    try{
+      const r = await adminAPI("adminFillMissing",{role:me.role,empId:me.empId,
+        month:m.month, day:m.day, client:m.client, time:m.time, targetEmpId:m.empId});
+      if(r.ok){
+        // 從清單移除這筆
+        setMissing(prev=>prev.filter(x=>(x.month+"/"+x.day+"|"+x.empId+"|"+x.client+"|"+(x.time||""))!==key));
+      } else setFillMsg(r.msg||"補填失敗");
+    }catch(ex){ setFillMsg("連線失敗"); }
+    setFillingKey("");
+  }
+
+  // 批次補填全部
+  async function fillAll(){
+    if(missing.length===0) return;
+    if(!confirm(`確定要批次補填全部 ${missing.length} 筆？\n服務概況會自動帶入該個案上次同 BA 碼的內容，狀態標「管理員補登」。`)) return;
+    setFilling(true); setFillMsg("");
+    const list = [...missing];
+    let done = 0, fail = 0;
+    for(const m of list){
+      try{
+        const r = await adminAPI("adminFillMissing",{role:me.role,empId:me.empId,
+          month:m.month, day:m.day, client:m.client, time:m.time, targetEmpId:m.empId});
+        if(r.ok) done++; else fail++;
+      }catch(ex){ fail++; }
+    }
+    setFilling(false);
+    setFillMsg(`✓ 補填完成：成功 ${done} 筆${fail?("，失敗 "+fail+" 筆"):""}`);
+    load(); // 重新查一次
+  }
 
   // 產生日期清單 [{month,day}]
   function buildDates(){
@@ -803,12 +869,27 @@ function MissingTab({me}){
     loading && e("div",{style:{textAlign:"center",padding:50,color:C.textSub,fontSize:17}},"查詢中…"),
     !loading && loaded && missing.length===0 && e("div",{style:{textAlign:"center",padding:60,color:C.ok,fontSize:19,lineHeight:1.8}},"✅",e("br"),"此範圍無漏填"),
     !loading && missing.length>0 && e("div",{style:{fontSize:16,color:C.warn,marginBottom:12,fontWeight:600}},"共 "+missing.length+" 筆未填"),
-    missing.map((m,i)=>e("div",{key:i,style:{background:C.card,borderRadius:10,marginBottom:8,padding:"12px 14px",border:`1px solid ${C.border}`}},
-      e("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}},
-        e("div",null,
-          e("span",{style:{fontSize:18,fontWeight:700,color:C.text}},m.empName||m.worker||m.empId),
-          e("span",{style:{fontSize:15,color:C.textSub,marginLeft:10}},(m.month||"")+"/"+(m.day||"")+" "+(m.time||""))),
-        e("span",{style:{fontSize:17,color:C.warn,fontWeight:600}},m.client)))));
+    fillMsg && e("div",{style:{fontSize:15,color:fillMsg.startsWith("✓")?C.ok:C.danger,marginBottom:10,fontWeight:600}},fillMsg),
+    missing.map((m,i)=>{
+      const key = m.month+"/"+m.day+"|"+m.empId+"|"+m.client+"|"+(m.time||"");
+      const busy = fillingKey===key;
+      return e("div",{key:i,style:{background:C.card,borderRadius:10,marginBottom:8,padding:"12px 14px",border:`1px solid ${C.border}`}},
+        e("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}},
+          e("div",null,
+            e("span",{style:{fontSize:18,fontWeight:700,color:C.text}},m.empName||m.worker||m.empId),
+            e("span",{style:{fontSize:15,color:C.textSub,marginLeft:10}},(m.month||"")+"/"+(m.day||"")+" "+(m.time||""))),
+          e("span",{style:{fontSize:17,color:C.warn,fontWeight:600}},m.client)),
+        e("div",{style:{marginTop:10,textAlign:"right"}},
+          e("button",{onClick:()=>fillOne(m),disabled:busy||filling,
+            style:{background:busy?C.ok:C.primary,color:"white",border:"none",borderRadius:8,padding:"8px 18px",fontSize:15,fontWeight:700,cursor:(busy||filling)?"default":"pointer",fontFamily:"inherit"}},
+            busy?"補填中…":"✏️ 補填")));
+    }),
+    // 底部批次補填
+    missing.length>0 && e("div",{style:{marginTop:16,paddingTop:14,borderTop:`1px solid ${C.border}`}},
+      e("button",{onClick:fillAll,disabled:filling,
+        style:{width:"100%",background:filling?C.ok:C.warn,color:"white",border:"none",borderRadius:10,padding:"14px",fontSize:18,fontWeight:700,cursor:filling?"default":"pointer",fontFamily:"inherit"}},
+        filling?"批次補填中…請稍候":("📝 批次補填全部 "+missing.length+" 筆")),
+      e("div",{style:{fontSize:13,color:C.textSub,textAlign:"center",marginTop:8,lineHeight:1.6}},"服務概況自動帶入該個案上次同 BA 碼內容，狀態標「管理員補登」")));
 }
 
 // 名單 Tab
@@ -999,7 +1080,7 @@ function AdminMain({me, onLogout}){
       e("button",{onClick:onLogout,style:{flexShrink:0,background:"rgba(255,255,255,.15)",border:"1px solid rgba(255,255,255,.35)",color:"white",borderRadius:9,padding:"9px 16px",fontSize:16,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}},"登出")),
     // Tab 列
     e("div",{style:{display:"flex",background:C.card,borderBottom:`2px solid ${C.border}`,position:"sticky",top:62,zIndex:29}},
-      tabs.map(([key,label])=>e("button",{key:key,onClick:()=>setTab(key),style:{flex:1,padding:"14px 4px",border:"none",borderBottom:tab===key?`3px solid ${C.primary}`:"3px solid transparent",background:"none",color:tab===key?C.primary:C.textSub,fontSize:16,fontWeight:tab===key?700:500,cursor:"pointer",fontFamily:"inherit"}},label))),
+      tabs.map(([key,label])=>e("button",{key:key,onClick:()=>setTab(key),style:{flex:1,padding:"16px 4px",border:"none",borderBottom:tab===key?`3px solid ${C.primary}`:"3px solid transparent",background:"none",color:tab===key?C.primary:C.textSub,fontSize:19,fontWeight:tab===key?700:500,cursor:"pointer",fontFamily:"inherit"}},label))),
     // 內容
     tab==="logs" && e(LogsTab,{me, key:"logs"}),
     tab==="abn" && e(AbnTab,{me, key:"abn"}),
