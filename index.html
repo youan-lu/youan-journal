@@ -13,7 +13,7 @@
   #loading { text-align:center; padding:80px 20px; color:#6E6A5F; font-size:18px; }
 </style>
 <script>
-// Service Worker 註冊（v37 離線功能）
+// Service Worker 註冊（v35 離線功能）
 if('serviceWorker' in navigator){
   navigator.serviceWorker.register('/youan-journal/sw.js',{scope:'/youan-journal/'})
     .then(()=>console.log('[SW] 已註冊'))
@@ -366,13 +366,12 @@ async function callAPI(action, params = {}) {
 
 
 // ════════════════════════════════════════════
-// 佑安離線功能模組 (v37)
+// 佑安離線功能模組 (v35)
 // ════════════════════════════════════════════
 const CACHE_PREFIX = 'youan_';
 const SCHEDULE_KEY_PREFIX = CACHE_PREFIX + 'schedule_'; // key = prefix + empId + '_' + month + '_' + day
 const PHRASES_KEY_PREFIX  = CACHE_PREFIX + 'phrases_';  // key = prefix + empId
 const PENDING_KEY = CACHE_PREFIX + 'pending_queue';     // 待傳送佇列
-const AUTO_LOGIN_KEY = CACHE_PREFIX + 'auto_login';         // 自動登入快取
 
 // ── 班表快取 ──
 function cacheSchedule(empId, month, day, data){
@@ -607,28 +606,6 @@ function App() {
   const user=me?`${me.name}　${me.empId}`:"";
   const session=activeIdx!=null?dayList[activeIdx]:null;
 
-  // 離線自動恢復登入（只還原狀態，不打 API，避免與手動登入衝突）
-  const [autoLoadId,setAutoLoadId] = React.useState(null);
-  React.useEffect(()=>{
-    try{
-      const saved = localStorage.getItem(AUTO_LOGIN_KEY);
-      if(saved){
-        const {empId,name,role,signature:sig} = JSON.parse(saved);
-        setMe({empId,name,role});
-        if(sig && sig.length>100) setSignature(sig);
-        setScreen("list");
-        setAutoLoadId(empId); // 標記需要載入，等畫面切換後再打 API
-      }
-    }catch(e){}
-  },[]);
-  // 自動載入：進入 list 畫面後才打 API
-  React.useEffect(()=>{
-    if(autoLoadId && screen==="list"){
-      loadDay(autoLoadId,pickMonth,pickDay);
-      setAutoLoadId(null);
-    }
-  },[autoLoadId,screen]);
-
   // 網路恢復時自動補傳佇列
   React.useEffect(()=>{
     const handler=()=>{ flushQueue(setQueueVersion); };
@@ -648,7 +625,6 @@ function App() {
       const r=await callAPI("login",{empId:loginId.trim(),password:loginPw});
       if(!r.ok){setLoginErr(r.msg||"登入失敗");setBusy(false);return;}
       setMe({empId:r.empId,name:r.name,role:r.role});
-      try{localStorage.setItem(AUTO_LOGIN_KEY,JSON.stringify({empId:r.empId,name:r.name,role:r.role,signature:r.signature||''}));}catch(e){}
       if(r.signature&&r.signature.length>100){
         setSignature(r.signature);
         setScreen("list");
@@ -808,7 +784,7 @@ function App() {
     React.createElement("div",{style:{background:C.primary,color:"white",padding:"16px 16px 14px",position:"sticky",top:0,zIndex:10}},
       React.createElement("div",{style:{display:"flex",alignItems:"center",justifyContent:"center",gap:10,marginBottom:6}},
         React.createElement(YouanLogo,{size:34,color:C.bear}),
-        React.createElement("div",{style:{fontSize:20,fontWeight:700,letterSpacing:.5,lineHeight:1.3}},"佑安服務日誌線上填寫系統 v37")),
+        React.createElement("div",{style:{fontSize:20,fontWeight:700,letterSpacing:.5,lineHeight:1.3}},"佑安服務日誌線上填寫系統 v35")),
       React.createElement("div",{style:{fontSize:21,opacity:.85,marginTop:6,textAlign:"center"}},today,"　現在 ",NOW_STR)),
     // 離線佇列提示橫幅
     (()=>{
@@ -826,7 +802,7 @@ function App() {
     React.createElement("div",{style:{margin:"12px 14px",background:C.card,borderRadius:10,padding:"12px 14px",display:"flex",justifyContent:"space-between",alignItems:"center",border:`1px solid ${C.border}`,flexWrap:"wrap",gap:8}},
       React.createElement("div",null,React.createElement("div",{style:{fontSize:24,fontWeight:700,color:C.text}},user)),
       React.createElement("div",{style:{display:"flex",gap:8,flexWrap:"wrap"}},
-        React.createElement("button",{onClick:()=>{try{localStorage.removeItem(AUTO_LOGIN_KEY);}catch(e){}setMe(null);setScreen("login");setLoginId("");setLoginPw("");setSignature("");},style:{background:C.divider,border:`1px solid ${C.border}`,borderRadius:8,padding:"7px 14px",fontSize:18,color:C.textSub,cursor:"pointer"}},"登出"),
+        React.createElement("button",{onClick:()=>{setMe(null);setScreen("login");setLoginId("");setLoginPw("");setSignature("");},style:{background:C.divider,border:`1px solid ${C.border}`,borderRadius:8,padding:"7px 14px",fontSize:18,color:C.textSub,cursor:"pointer"}},"登出"),
         React.createElement("button",{onClick:()=>{setShowChangePw(true);setOldPw("");setNewPw("");setNewPw2("");setPwMsg("");},style:{background:C.divider,border:`1px solid ${C.border}`,borderRadius:8,padding:"7px 14px",fontSize:18,color:C.textSub,cursor:"pointer"}},"更改密碼"),
         React.createElement("button",{onClick:()=>{setShowSignPad(true);setScreen("sign");},style:{background:C.primaryLight,border:`1px solid ${C.primary}`,borderRadius:8,padding:"7px 14px",fontSize:18,color:C.primary,cursor:"pointer"}},"重新簽名"))),
     // 更改密碼
