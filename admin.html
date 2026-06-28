@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 佑安管理介面 admin.html v3 -- 漏填三模式(週/月/區間) + 員工增刪改密碼 -->
+<!-- 佑安管理介面 admin.html v3.1 -- 漏填三模式(週/月/區間) + 員工增刪改密碼 -->
 <html lang="zh-Hant">
 <head>
 <meta charset="UTF-8">
@@ -390,7 +390,7 @@ const YouanLogo = ({size=30}) => React.createElement("img",{src:LOGO_SRC,alt:"�
 
 const PillTitle = ({icon,children}) => React.createElement("div",{style:{display:"inline-flex",alignItems:"center",gap:8,background:C.primary,color:"white",borderRadius:22,padding:"7px 18px",fontSize:19,fontWeight:700}},icon&&React.createElement("span",{style:{fontSize:19}},icon),children);
 
-const FooterBar = () => React.createElement("div",{style:{background:C.primary,padding:"16px",display:"flex",alignItems:"center",justifyContent:"center",gap:10,marginTop:10}},React.createElement(YouanLogo,{size:32,color:C.bear}),React.createElement("div",{style:{textAlign:"center"}},React.createElement("div",{style:{color:"white",fontSize:16,fontWeight:700,letterSpacing:1}},"佑安居家長照機構"),React.createElement("div",{style:{color:"rgba(255,255,255,.6)",fontSize:9,letterSpacing:1}},"Youan Long Term Care Institutions　v3")));
+const FooterBar = () => React.createElement("div",{style:{background:C.primary,padding:"16px",display:"flex",alignItems:"center",justifyContent:"center",gap:10,marginTop:10}},React.createElement(YouanLogo,{size:32,color:C.bear}),React.createElement("div",{style:{textAlign:"center"}},React.createElement("div",{style:{color:"white",fontSize:16,fontWeight:700,letterSpacing:1}},"佑安居家長照機構"),React.createElement("div",{style:{color:"rgba(255,255,255,.6)",fontSize:9,letterSpacing:1}},"Youan Long Term Care Institutions　v3.1")));
 
 const endHourOf = t => { const m=t.match(/~(\d{2}):(\d{2})/); return m?parseInt(m[1])+parseInt(m[2])/60:24; };
 
@@ -537,8 +537,8 @@ function AdminLogin({onLogin}){
   }
 
   return e("div",{style:{minHeight:"100vh",background:C.bg,display:"flex",flexDirection:"column",fontFamily:"'Noto Sans TC', sans-serif"}},
-    e("div",{style:{flex:1,display:"flex",flexDirection:"column",justifyContent:"center",padding:"24px 20px"}},
-      e("div",{style:{textAlign:"center",marginBottom:8}}, e(YouanLogo,{size:72})),
+    e("div",{style:{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"24px 20px"}},
+      e("div",{style:{marginBottom:8}}, e(YouanLogo,{size:72})),
       e("div",{style:{fontSize:26,fontWeight:700,color:C.primary,marginTop:14,marginBottom:2,textAlign:"center"}},"佑安管理介面"),
       e("div",{style:{fontSize:17,color:C.textSub,textAlign:"center",marginBottom:32}},"管理員 / 督導 專用"),
       e("div",{style:{display:"flex",flexDirection:"column",gap:18,maxWidth:420,margin:"0 auto",width:"100%"}},
@@ -640,21 +640,21 @@ function LogsTab({me}){
   return e("div",{style:{padding:"14px 14px 90px"}},
     // 篩選卡片
     e("div",{style:{background:C.card,borderRadius:12,padding:14,marginBottom:14,border:`1px solid ${C.border}`}},
-      e("div",{style:{display:"flex",flexWrap:"wrap",gap:10}},
-        e("div",{style:{flex:"1 1 90px"}},
-          e("div",{style:{fontSize:14,color:C.textSub,marginBottom:5}},"日期"),
+      e("div",{style:{display:"flex",flexWrap:"wrap",gap:12}},
+        e("div",{style:{flex:"1 1 100px"}},
+          e("div",{style:{fontSize:18,color:C.textSub,marginBottom:6,textAlign:"center"}},"日期"),
           e("input",{type:"date",value:fDate,onChange:ev=>setFDate(ev.target.value),
-            style:{width:"100%",border:`1.5px solid ${C.border}`,borderRadius:9,padding:"11px 12px",fontSize:17,fontFamily:"inherit",boxSizing:"border-box",outline:"none",background:"white"}})),
-        e("div",{style:{flex:"1 1 90px"}},
-          e("div",{style:{fontSize:14,color:C.textSub,marginBottom:5}},"照服員"),
+            style:{width:"100%",border:`1.5px solid ${C.border}`,borderRadius:9,padding:"14px 12px",fontSize:22,fontFamily:"inherit",boxSizing:"border-box",outline:"none",background:"white",textAlign:"center"}})),
+        e("div",{style:{flex:"1 1 100px"}},
+          e("div",{style:{fontSize:18,color:C.textSub,marginBottom:6,textAlign:"center"}},"照服員"),
           e("select",{value:fWorker,onChange:ev=>setFWorker(ev.target.value),
-            style:{width:"100%",border:`1.5px solid ${C.border}`,borderRadius:9,padding:"11px 12px",fontSize:17,fontFamily:"inherit",boxSizing:"border-box",outline:"none",background:"white"}},
+            style:{width:"100%",border:`1.5px solid ${C.border}`,borderRadius:9,padding:"14px 12px",fontSize:22,fontFamily:"inherit",boxSizing:"border-box",outline:"none",background:"white",textAlign:"center"}},
             e("option",{value:""},"全部"),
             staffOpts.map((n,i)=>e("option",{key:i,value:n},n)))),
-        e("div",{style:{flex:"1 1 90px"}},
-          e("div",{style:{fontSize:14,color:C.textSub,marginBottom:5}},"個案"),
+        e("div",{style:{flex:"1 1 100px"}},
+          e("div",{style:{fontSize:18,color:C.textSub,marginBottom:6,textAlign:"center"}},"個案"),
           e("select",{value:fClient,onChange:ev=>setFClient(ev.target.value),
-            style:{width:"100%",border:`1.5px solid ${C.border}`,borderRadius:9,padding:"11px 12px",fontSize:17,fontFamily:"inherit",boxSizing:"border-box",outline:"none",background:"white"}},
+            style:{width:"100%",border:`1.5px solid ${C.border}`,borderRadius:9,padding:"14px 12px",fontSize:22,fontFamily:"inherit",boxSizing:"border-box",outline:"none",background:"white",textAlign:"center"}},
             e("option",{value:""},"全部"),
             caseOpts.map((n,i)=>e("option",{key:i,value:n},n))))),
       e("div",{style:{marginTop:12}},
@@ -666,17 +666,17 @@ function LogsTab({me}){
     logs.map(log=>{
       const editing = editRow===log.row;
       const abn = log.status==="異常"||log.status==="班表異常";
-      return e("div",{key:log.row,style:{background:C.card,borderRadius:12,marginBottom:10,padding:"13px 15px",border:`1.5px solid ${abn?C.accent:C.border}`}},
+      return e("div",{key:log.row,style:{background:C.card,borderRadius:12,marginBottom:12,padding:"16px 18px",border:`1.5px solid ${abn?C.accent:C.border}`}},
         e("div",{onClick:()=>openEdit(log),style:{cursor:"pointer"}},
-          e("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6,gap:8}},
-            e("div",{style:{display:"flex",gap:8,flexWrap:"wrap",alignItems:"baseline"}},
-              e("span",{style:{fontSize:19,fontWeight:700,color:C.text}},log.client),
-              e("span",{style:{fontSize:15,color:C.textSub}},dateDisp(log.date)+" "+log.time),
-              e("span",{style:{fontSize:15,color:C.primary,fontWeight:600}},log.worker)),
+          e("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8,gap:8}},
+            e("div",{style:{display:"flex",gap:10,flexWrap:"wrap",alignItems:"baseline",justifyContent:"center",flex:1}},
+              e("span",{style:{fontSize:25,fontWeight:700,color:C.text}},log.client),
+              e("span",{style:{fontSize:19,color:C.textSub}},dateDisp(log.date)+" "+log.time),
+              e("span",{style:{fontSize:19,color:C.primary,fontWeight:600}},log.worker)),
             e(AdminTag,{text:log.status,color:log.status==="已送出"?"ok":(abn?"warn":"danger")})),
-          log.baCode && e("div",{style:{fontSize:14,color:C.textSub,marginBottom:3}},log.baCode),
-          e("div",{style:{fontSize:17,color:C.text,lineHeight:1.5}},log.summary||"（無服務概況）"),
-          log.skinNote && e("div",{style:{fontSize:15,color:C.warn,marginTop:4}},"⚠️ "+log.skinNote)),
+          log.baCode && e("div",{style:{fontSize:18,color:C.textSub,marginBottom:4,textAlign:"center"}},log.baCode),
+          e("div",{style:{fontSize:22,color:C.text,lineHeight:1.5,textAlign:"center"}},log.summary||"（無服務概況）"),
+          log.skinNote && e("div",{style:{fontSize:18,color:C.warn,marginTop:5,textAlign:"center"}},"⚠️ "+log.skinNote)),
 
         editing && e("div",{style:{marginTop:12,borderTop:`1px solid ${C.border}`,paddingTop:12,display:"flex",flexDirection:"column",gap:10}},
           e("div",null,
@@ -1072,14 +1072,14 @@ function AdminMain({me, onLogout}){
   return e("div",{style:{minHeight:"100vh",background:C.bg,fontFamily:"'Noto Sans TC', sans-serif"}},
     // 頂部
     e("div",{style:{background:C.primary,color:"white",padding:"14px 16px",position:"sticky",top:0,zIndex:30,display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}},
-      e("div",{style:{display:"flex",alignItems:"center",gap:10}},
-        e(YouanLogo,{size:32,color:C.bear}),
+      e("div",{style:{display:"flex",alignItems:"center",gap:12}},
+        e(YouanLogo,{size:42,color:C.bear}),
         e("div",null,
-          e("div",{style:{fontSize:19,fontWeight:700}},"佑安管理介面"),
-          e("div",{style:{fontSize:13,opacity:.8}},me.name+"（"+me.role+"）"))),
+          e("div",{style:{fontSize:25,fontWeight:700}},"佑安管理介面　v3.1"),
+          e("div",{style:{fontSize:15,opacity:.8}},me.name+"（"+me.role+"）"))),
       e("button",{onClick:onLogout,style:{flexShrink:0,background:"rgba(255,255,255,.15)",border:"1px solid rgba(255,255,255,.35)",color:"white",borderRadius:9,padding:"9px 16px",fontSize:16,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}},"登出")),
     // Tab 列
-    e("div",{style:{display:"flex",background:C.card,borderBottom:`2px solid ${C.border}`,position:"sticky",top:62,zIndex:29}},
+    e("div",{style:{display:"flex",background:C.card,borderBottom:`2px solid ${C.border}`,position:"sticky",top:74,zIndex:29}},
       tabs.map(([key,label])=>e("button",{key:key,onClick:()=>setTab(key),style:{flex:1,padding:"16px 4px",border:"none",borderBottom:tab===key?`3px solid ${C.primary}`:"3px solid transparent",background:"none",color:tab===key?C.primary:C.textSub,fontSize:19,fontWeight:tab===key?700:500,cursor:"pointer",fontFamily:"inherit"}},label))),
     // 內容
     tab==="logs" && e(LogsTab,{me, key:"logs"}),
