@@ -13,7 +13,7 @@
   #loading { text-align:center; padding:80px 20px; color:#6E6A5F; font-size:18px; }
 </style>
 <script>
-// Service Worker 註冊（v35 離線功能）
+// Service Worker 註冊（v38 離線功能）
 if('serviceWorker' in navigator){
   navigator.serviceWorker.register('/youan-journal/sw.js',{scope:'/youan-journal/'})
     .then(()=>console.log('[SW] 已註冊'))
@@ -366,7 +366,7 @@ async function callAPI(action, params = {}) {
 
 
 // ════════════════════════════════════════════
-// 佑安離線功能模組 (v35)
+// 佑安離線功能模組 (v38)
 // ════════════════════════════════════════════
 const CACHE_PREFIX = 'youan_';
 const SCHEDULE_KEY_PREFIX = CACHE_PREFIX + 'schedule_'; // key = prefix + empId + '_' + month + '_' + day
@@ -584,8 +584,6 @@ function App() {
   const [fromLastMap,setFromLastMap] = useState({});
   const [extraCodes,setExtraCodes] = useState([]);
   const [showAddPanel,setShowAddPanel] = useState(false);
-  const [abnormalMap,setAbnormalMap] = useState({});
-  const [reportingAbn,setReportingAbn] = useState(false);
   const [savedTemplates,setSavedTemplates] = useState({});
   const [submitted,setSubmitted] = useState([]);
   const [savedData,setSavedData] = useState({});
@@ -597,6 +595,10 @@ function App() {
   const [newPw,setNewPw] = useState("");
   const [newPw2,setNewPw2] = useState("");
   const [pwMsg,setPwMsg] = useState("");
+  // 未填警示
+  const [missingDays,setMissingDays] = useState([]);   // 本月未填日期陣列，如 [2,5,9]
+  const [missingOpen,setMissingOpen] = useState(false); // 警示框是否展開
+  const [missingLoading,setMissingLoading] = useState(false);
   // 數位簽章
   const [signature,setSignature] = useState("");
   const [showSignPad,setShowSignPad] = useState(false);
@@ -629,12 +631,36 @@ function App() {
         setSignature(r.signature);
         setScreen("list");
         loadDay(r.empId,pickMonth,pickDay);
+        loadMissing(r.empId,pickMonth);
       }else{
         setShowSignPad(true);
         setScreen("sign");
       }
     }catch(e){setLoginErr("連線失敗，請檢查網路");}
     setBusy(false);
+  };
+
+  // 查本月未填（呼叫後端 adminGetMissing，帶 empId 只看本人）
+  const loadMissing=async(empId,m)=>{
+    setMissingLoading(true);
+    try{
+      // 產生本月 1號~今天 的日期清單（只查今天以前，今天也算）
+      const isCurMonth = (m === _now.getMonth()+1);
+      const lastDay = isCurMonth ? _now.getDate() : new Date(_now.getFullYear(), m, 0).getDate();
+      const dates=[];
+      for(let dd=1; dd<=lastDay; dd++) dates.push({month:m, day:dd});
+      const r=await callAPI("adminGetMissing",{empId, dates:JSON.stringify(dates)});
+      if(r.ok && Array.isArray(r.missing)){
+        // 取出不重複的「日」
+        const daySet={};
+        r.missing.forEach(x=>{ if(parseInt(x.month)===m) daySet[parseInt(x.day)]=true; });
+        const days=Object.keys(daySet).map(n=>parseInt(n)).sort((a,b)=>a-b);
+        setMissingDays(days);
+      }else{
+        setMissingDays([]);
+      }
+    }catch(e){ setMissingDays([]); }
+    setMissingLoading(false);
   };
 
   const loadDay=async(empId,m,d)=>{
@@ -645,9 +671,9 @@ function App() {
     if(cachedSched){
       const days=cachedSched.day||[];
       setDayList(days);
-      const subIdx=[]; const abnIdx={};
-      days.forEach((s,i)=>{ if(s.done)subIdx.push(i); if(s.abnormal)abnIdx[i]=true; });
-      setSubmitted(subIdx); setAbnormalMap(abnIdx);
+      const subIdx=[];
+      days.forEach((s,i)=>{ if(s.done)subIdx.push(i); });
+      setSubmitted(subIdx);
       if(cachedPhr){
         setPhrases(cachedPhr.phrases||{});
         setByCode(cachedPhr.byCode||{});
@@ -662,9 +688,9 @@ function App() {
       const [dayR,phR]=await Promise.all([callAPI("getDay",{empId,month:m,day:d}),callAPI("getPhrases",{empId})]);
       const days=dayR.ok?dayR.day:[];
       setDayList(days);
-      const subIdx=[]; const abnIdx={};
-      days.forEach((s,i)=>{ if(s.done)subIdx.push(i); if(s.abnormal)abnIdx[i]=true; });
-      setSubmitted(subIdx); setAbnormalMap(abnIdx);
+      const subIdx=[];
+      days.forEach((s,i)=>{ if(s.done)subIdx.push(i); });
+      setSubmitted(subIdx);
       setPhrases(phR.ok?phR.phrases:{});
       setByCode(phR.ok?phR.byCode||{}:{});
       setLastSkin(phR.ok?phR.lastSkin||{}:{});
@@ -680,7 +706,13 @@ function App() {
     flushQueue(setQueueVersion);
   };
 
-  const changeDate=(m,d)=>{setPickMonth(m);setPickDay(d);if(me)loadDay(me.empId,m,d);};
+  const changeDate=(m,d)=>{
+    const monthChanged = (m !== pickMonth);
+    setPickMonth(m);setPickDay(d);
+    if(me){ loadDay(me.empId,m,d); if(monthChanged) loadMissing(me.empId,m); }
+  };
+  // 點未填警示中的某天 → 跳過去
+  const goToMissingDay=(d)=>{ changeDate(pickMonth,d); setMissingOpen(false); };
 
   const handleOpen=idx=>{
     const s=dayList[idx]; setActiveIdx(idx);
@@ -710,20 +742,11 @@ function App() {
   const codesInSession=session?[...session.codes.map(c=>({...c,extra:false})),...extraCodes.map(c=>({...c,extra:true}))]:[];
   const allFilled=codesInSession.length>0&&codesInSession.every(c=>codeValues[c.code]?.trim());
 
-  const reportAbnormal=()=>{
-    if(abnormalMap[activeIdx]){
-      setAbnormalMap(p=>({...p,[activeIdx]:false}));
-    }else{
-      if(!confirm(`確定要將「${session.client}」此班次標記為「異常」嗎？\n標記後可自由填寫實際服務內容，照常送出，月底訂正時會列出。`))return;
-      setAbnormalMap(p=>({...p,[activeIdx]:true}));
-    }
-  };
   const handleSubmit=async()=>{
-    const isAbn=!!abnormalMap[activeIdx];
-    if(!allFilled||(!canSubmitNow()&&!isAbn)||busy)return;
+    if(!allFilled||!canSubmitNow()||busy)return;
     setBusy(true);
     const records=codesInSession.map(c=>({code:c.code,summary:codeValues[c.code]||"",extra:!!c.extra}));
-    const payload={empId:me.empId,empName:me.name,serviceDate:`${_now.getFullYear()-1911}/${pickMonth}/${pickDay}`,client:session.client,time:session.time,bantype:session.bantype,skin,skinNote:(skin==="new"||skin==="prev")?skinNote:"",records,signature,abnormal:isAbn};
+    const payload={empId:me.empId,empName:me.name,serviceDate:`${_now.getFullYear()-1911}/${pickMonth}/${pickDay}`,client:session.client,time:session.time,bantype:session.bantype,skin,skinNote:(skin==="new"||skin==="prev")?skinNote:"",records,signature,abnormal:false};
     // 先存入佇列（id 用來追蹤狀態）
     const qId = enqueueSubmit(payload);
     setQueueVersion(v=>v+1); // 觸發重繪
@@ -736,6 +759,7 @@ function App() {
       const submitRes=await fetch(API,{method:"POST",body:JSON.stringify({action:"submit",data:JSON.stringify(payload)})}).then(r=>r.json()).catch(()=>null);
       if(submitRes&&submitRes.ok){
         updateQueueItem(qId,{status:'sent',sentAt:Date.now()});
+        loadMissing(me.empId,pickMonth); // 送出成功 → 更新未填警示
         // 儲存範本（非同步）
         for(const c of codesInSession){
           if(savedTemplates[c.code]&&codeValues[c.code]){
@@ -762,7 +786,7 @@ function App() {
 
   // ── 簽名板畫面 ──
   if(screen==="sign") return React.createElement("div",{style:{minHeight:"100vh",background:"#1a2e1f",fontFamily:"'Noto Sans TC', sans-serif"}},
-    showSignPad&&me&&React.createElement(SignaturePad,{empId:me.empId,empName:me.name,onSave:dataUrl=>{setSignature(dataUrl);setShowSignPad(false);setScreen("list");loadDay(me.empId,pickMonth,pickDay);}})
+    showSignPad&&me&&React.createElement(SignaturePad,{empId:me.empId,empName:me.name,onSave:dataUrl=>{setSignature(dataUrl);setShowSignPad(false);setScreen("list");loadDay(me.empId,pickMonth,pickDay);loadMissing(me.empId,pickMonth);}})
   );
 
   // ── 登入畫面 ──
@@ -784,7 +808,7 @@ function App() {
     React.createElement("div",{style:{background:C.primary,color:"white",padding:"16px 16px 14px",position:"sticky",top:0,zIndex:10}},
       React.createElement("div",{style:{display:"flex",alignItems:"center",justifyContent:"center",gap:10,marginBottom:6}},
         React.createElement(YouanLogo,{size:34,color:C.bear}),
-        React.createElement("div",{style:{fontSize:20,fontWeight:700,letterSpacing:.5,lineHeight:1.3}},"佑安服務日誌線上填寫系統 v35")),
+        React.createElement("div",{style:{fontSize:20,fontWeight:700,letterSpacing:.5,lineHeight:1.3}},"佑安服務日誌線上填寫系統 v38")),
       React.createElement("div",{style:{fontSize:21,opacity:.85,marginTop:6,textAlign:"center"}},today,"　現在 ",NOW_STR)),
     // 離線佇列提示橫幅
     (()=>{
@@ -865,6 +889,13 @@ function App() {
         setUploading(false); e.target.value="";
       },style:{fontSize:16,marginBottom:8}}),
       uploadMsg&&React.createElement("div",{style:{fontSize:16,color:uploadMsg.includes("✅")?C.ok:uploadMsg.includes("❌")?C.danger:C.textSub,fontWeight:600}},uploadMsg)),
+    // 未填警示框（只在有未填時顯示）
+    missingDays.length>0 && React.createElement("div",{style:{margin:"0 14px 12px",background:"#FFF7ED",borderRadius:10,border:`1.5px solid ${C.warn}`,overflow:"hidden"}},
+      React.createElement("div",{onClick:()=>setMissingOpen(o=>!o),style:{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 14px",cursor:"pointer"}},
+        React.createElement("div",{style:{fontSize:18,fontWeight:700,color:C.warn}},"\u26A0\uFE0F \u672C\u6708\u6709 ",missingDays.length," \u5929\u5C1A\u672A\u586B\u5BEB"),
+        React.createElement("span",{style:{fontSize:18,color:C.warn,fontWeight:700}},missingOpen?"\u2303":"\u203A")),
+      missingOpen && React.createElement("div",{style:{padding:"0 14px 12px",display:"flex",flexWrap:"wrap",gap:8}},
+        missingDays.map(d=>React.createElement("button",{key:d,onClick:()=>goToMissingDay(d),style:{background:"white",border:`1px solid ${C.warn}`,borderRadius:8,padding:"8px 14px",fontSize:17,fontWeight:700,color:C.warn,cursor:"pointer"}},pickMonth,"/",d," \u203A")))),
     // 日期選擇
     React.createElement("div",{style:{margin:"0 14px 12px",background:C.card,borderRadius:10,padding:"12px 14px",border:`1px solid ${C.border}`}},
       React.createElement("div",{style:{fontSize:17,color:C.textSub,marginBottom:8}},"服務日期"),
@@ -932,8 +963,7 @@ function App() {
       React.createElement("div",null,
         React.createElement("div",{style:{display:"flex",alignItems:"baseline",gap:10,marginBottom:2,flexWrap:"wrap"}},
           React.createElement("span",{style:{fontSize:21,fontWeight:700}},session.client),
-          React.createElement("span",{style:{fontSize:17,opacity:.85,whiteSpace:"nowrap"}},session.time),
-          React.createElement("button",{onClick:reportAbnormal,disabled:reportingAbn||abnormalMap[activeIdx],style:{background:abnormalMap[activeIdx]?"rgba(255,255,255,.2)":C.accent,border:"none",color:"white",borderRadius:8,padding:"4px 10px",fontSize:14,fontWeight:700,cursor:abnormalMap[activeIdx]?"default":"pointer",whiteSpace:"nowrap"}},abnormalMap[activeIdx]?"⚠️ 已通報異常":"⚠️ 異常通報")),
+          React.createElement("span",{style:{fontSize:17,opacity:.85,whiteSpace:"nowrap"}},session.time)),
         React.createElement("div",{style:{fontSize:17,opacity:.85,whiteSpace:"nowrap"}},today))),
     React.createElement("div",{style:{padding:"14px 14px 100px",display:"flex",flexDirection:"column",gap:14}},
       Object.keys(fromLastMap).length>0&&React.createElement("div",{style:{background:C.okLight,border:`1px solid ${C.ok}`,borderRadius:8,padding:"10px 14px",fontSize:18,color:C.ok}},"↩ 已自動帶入上次服務內容，請確認、增減或修改"),
@@ -947,7 +977,7 @@ function App() {
         codesInSession.map((c,i)=>React.createElement(CodeBlock,{key:c.code+i,codeItem:c,extra:c.extra,fromLast:fromLastMap[c.code],chips:(()=>{const exact=phrases[`${session.client}_${c.code}`]||[];const all=byCode[c.code]||[];const seen=new Set(exact.map(p=>p.text));return[...exact.map(p=>({t:p.text,freq:p.count,personal:true})),...all.filter(p=>!seen.has(p.text)).map(p=>({t:p.text,freq:p.count,personal:false}))];})(),value:codeValues[c.code]||"",saved:savedTemplates[c.code],onChange:v=>{setCodeValues(p=>({...p,[c.code]:v}));setSavedTemplates(p=>({...p,[c.code]:false}));},onSaveTemplate:()=>setSavedTemplates(p=>({...p,[c.code]:true})),onRemove:()=>removeExtra(c.code)})),
         !allFilled&&React.createElement("div",{style:{background:C.warnLight,border:`1px solid #FCD34D`,borderRadius:8,padding:"10px 14px",fontSize:18,color:C.warn}},"⚠️ 尚有 ",codesInSession.filter(c=>!codeValues[c.code]?.trim()).length," 個項目未填寫")),
     React.createElement("div",{style:{position:"fixed",bottom:0,left:0,right:0,background:"white",borderTop:`1px solid ${C.border}`,padding:"12px 14px"}},
-      React.createElement("button",{onClick:handleSubmit,disabled:busy||!(allFilled&&(canSubmitNow()||abnormalMap[activeIdx])),style:{width:"100%",background:busy?C.ok:((allFilled&&(canSubmitNow()||abnormalMap[activeIdx]))?(abnormalMap[activeIdx]?C.warn:C.accent):C.border),color:busy?"white":((allFilled&&(canSubmitNow()||abnormalMap[activeIdx]))?"white":C.textSub),border:"none",borderRadius:10,padding:"14px",fontSize:21,fontWeight:700,cursor:(allFilled&&(canSubmitNow()||abnormalMap[activeIdx]))?"pointer":"default"}},busy?"處理中…":abnormalMap[activeIdx]?(allFilled?"⚠️ 送出（含異常）　→":"請填寫所有項目"):(canSubmitNow()?(allFilled?"確認送出　→":"請填寫所有項目"):"🔒 班次結束後才能送出")))));
+      React.createElement("button",{onClick:handleSubmit,disabled:busy||!(allFilled&&canSubmitNow()),style:{width:"100%",background:busy?C.ok:((allFilled&&canSubmitNow())?C.accent:C.border),color:busy?"white":((allFilled&&canSubmitNow())?"white":C.textSub),border:"none",borderRadius:10,padding:"14px",fontSize:21,fontWeight:700,cursor:(allFilled&&canSubmitNow())?"pointer":"default"}},busy?"處理中…":(canSubmitNow()?(allFilled?"確認送出　→":"請填寫所有項目"):"🔒 班次結束後才能送出")))));
 
   // ── 送出完成 ──
   return React.createElement("div",{style:{minHeight:"100vh",background:C.bg,fontFamily:"'Noto Sans TC', sans-serif",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24}},
