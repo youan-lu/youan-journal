@@ -13,7 +13,7 @@
   #loading { text-align:center; padding:80px 20px; color:#6E6A5F; font-size:18px; }
 </style>
 <script>
-// Service Worker 註冊（v38 離線功能）
+// Service Worker 註冊（v39 離線功能）
 if('serviceWorker' in navigator){
   navigator.serviceWorker.register('/youan-journal/sw.js',{scope:'/youan-journal/'})
     .then(()=>console.log('[SW] 已註冊'))
@@ -366,7 +366,7 @@ async function callAPI(action, params = {}) {
 
 
 // ════════════════════════════════════════════
-// 佑安離線功能模組 (v38)
+// 佑安離線功能模組 (v39)
 // ════════════════════════════════════════════
 const CACHE_PREFIX = 'youan_';
 const SCHEDULE_KEY_PREFIX = CACHE_PREFIX + 'schedule_'; // key = prefix + empId + '_' + month + '_' + day
@@ -519,24 +519,45 @@ const CodeBlock = ({codeItem,value,onChange,extra,onRemove,fromLast,chips,onSave
 // ── 數位簽名板元件 ──
 const SignaturePad = ({onSave,empId,empName}) => {
   const canvasRef = React.useRef(null);
-  const [drawing,setDrawing] = React.useState(false);
   const [hasStroke,setHasStroke] = React.useState(false);
   const [saving,setSaving] = React.useState(false);
+  const drawingRef = React.useRef(false);
   React.useEffect(()=>{
     const canvas=canvasRef.current; if(!canvas)return;
     const ctx=canvas.getContext("2d");
     ctx.fillStyle="#fff"; ctx.fillRect(0,0,canvas.width,canvas.height);
     ctx.strokeStyle="#1a1a1a"; ctx.lineWidth=3; ctx.lineCap="round"; ctx.lineJoin="round";
+
+    // 原生事件綁定（passive:false 才能真正阻止頁面捲動）
+    const posOf=(ev)=>{
+      const rect=canvas.getBoundingClientRect();
+      const sX=canvas.width/rect.width, sY=canvas.height/rect.height;
+      const t=ev.touches?ev.touches[0]:ev;
+      return {x:(t.clientX-rect.left)*sX, y:(t.clientY-rect.top)*sY};
+    };
+    const onStart=(ev)=>{ ev.preventDefault(); const p=posOf(ev); ctx.beginPath(); ctx.moveTo(p.x,p.y); drawingRef.current=true; };
+    const onMove=(ev)=>{ if(!drawingRef.current)return; ev.preventDefault(); const p=posOf(ev); ctx.lineTo(p.x,p.y); ctx.stroke(); setHasStroke(true); };
+    const onEnd=(ev)=>{ if(ev)ev.preventDefault(); drawingRef.current=false; };
+
+    canvas.addEventListener("touchstart",onStart,{passive:false});
+    canvas.addEventListener("touchmove", onMove, {passive:false});
+    canvas.addEventListener("touchend",  onEnd,  {passive:false});
+    canvas.addEventListener("touchcancel",onEnd, {passive:false});
+    canvas.addEventListener("mousedown", onStart);
+    canvas.addEventListener("mousemove", onMove);
+    canvas.addEventListener("mouseup",   onEnd);
+    canvas.addEventListener("mouseleave",onEnd);
+    return ()=>{
+      canvas.removeEventListener("touchstart",onStart);
+      canvas.removeEventListener("touchmove", onMove);
+      canvas.removeEventListener("touchend",  onEnd);
+      canvas.removeEventListener("touchcancel",onEnd);
+      canvas.removeEventListener("mousedown", onStart);
+      canvas.removeEventListener("mousemove", onMove);
+      canvas.removeEventListener("mouseup",   onEnd);
+      canvas.removeEventListener("mouseleave",onEnd);
+    };
   },[]);
-  const getPos=(e,canvas)=>{
-    const rect=canvas.getBoundingClientRect();
-    const scaleX=canvas.width/rect.width, scaleY=canvas.height/rect.height;
-    if(e.touches) return {x:(e.touches[0].clientX-rect.left)*scaleX,y:(e.touches[0].clientY-rect.top)*scaleY};
-    return {x:(e.clientX-rect.left)*scaleX,y:(e.clientY-rect.top)*scaleY};
-  };
-  const startDraw=e=>{e.preventDefault();const canvas=canvasRef.current;const ctx=canvas.getContext("2d");const pos=getPos(e,canvas);ctx.beginPath();ctx.moveTo(pos.x,pos.y);setDrawing(true);};
-  const draw=e=>{if(!drawing)return;e.preventDefault();const canvas=canvasRef.current;const ctx=canvas.getContext("2d");const pos=getPos(e,canvas);ctx.lineTo(pos.x,pos.y);ctx.stroke();setHasStroke(true);};
-  const endDraw=e=>{if(e)e.preventDefault();setDrawing(false);};
   const clearCanvas=()=>{const canvas=canvasRef.current;const ctx=canvas.getContext("2d");ctx.fillStyle="#fff";ctx.fillRect(0,0,canvas.width,canvas.height);setHasStroke(false);};
   const saveSign=async()=>{
     if(!hasStroke||saving)return;
@@ -556,7 +577,7 @@ const SignaturePad = ({onSave,empId,empName}) => {
     React.createElement("div",{style:{color:"white",fontSize:20,fontWeight:700,marginBottom:8,textAlign:"center"}},"✍️ 請手寫您的簽名"),
     React.createElement("div",{style:{color:"rgba(255,255,255,.65)",fontSize:15,marginBottom:18,textAlign:"center",lineHeight:1.6}},empName,"　此簽名只需設定一次，之後自動帶出"),
     React.createElement("div",{style:{background:"white",borderRadius:12,overflow:"hidden",boxShadow:"0 4px 24px rgba(0,0,0,.4)",touchAction:"none",width:"min(92vw, 560px)",aspectRatio:"2.8/1"}},
-      React.createElement("canvas",{ref:canvasRef,width:840,height:300,style:{width:"100%",height:"100%",display:"block",cursor:"crosshair"},onMouseDown:startDraw,onMouseMove:draw,onMouseUp:endDraw,onMouseLeave:endDraw,onTouchStart:startDraw,onTouchMove:draw,onTouchEnd:endDraw})),
+      React.createElement("canvas",{ref:canvasRef,width:840,height:300,style:{width:"100%",height:"100%",display:"block",cursor:"crosshair",touchAction:"none"}})),
     React.createElement("div",{style:{display:"flex",gap:12,marginTop:18}},
       React.createElement("button",{onClick:clearCanvas,style:{background:"rgba(255,255,255,.12)",border:"1px solid rgba(255,255,255,.3)",color:"white",borderRadius:10,padding:"13px 28px",fontSize:18,cursor:"pointer",fontWeight:600,fontFamily:"inherit"}},"清除重簽"),
       React.createElement("button",{onClick:saveSign,disabled:!hasStroke||saving,style:{background:hasStroke&&!saving?"#C75B39":"rgba(255,255,255,.2)",border:"none",color:"white",borderRadius:10,padding:"13px 36px",fontSize:18,fontWeight:700,cursor:hasStroke&&!saving?"pointer":"default",fontFamily:"inherit"}},saving?"儲存中…":"確認簽名　→")));
@@ -808,7 +829,7 @@ function App() {
     React.createElement("div",{style:{background:C.primary,color:"white",padding:"16px 16px 14px",position:"sticky",top:0,zIndex:10}},
       React.createElement("div",{style:{display:"flex",alignItems:"center",justifyContent:"center",gap:10,marginBottom:6}},
         React.createElement(YouanLogo,{size:34,color:C.bear}),
-        React.createElement("div",{style:{fontSize:20,fontWeight:700,letterSpacing:.5,lineHeight:1.3}},"佑安服務日誌線上填寫系統 v38")),
+        React.createElement("div",{style:{fontSize:20,fontWeight:700,letterSpacing:.5,lineHeight:1.3}},"佑安服務日誌線上填寫系統 v39")),
       React.createElement("div",{style:{fontSize:21,opacity:.85,marginTop:6,textAlign:"center"}},today,"　現在 ",NOW_STR)),
     // 離線佇列提示橫幅
     (()=>{
