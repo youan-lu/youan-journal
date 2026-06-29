@@ -1103,20 +1103,22 @@ function AdminMain({me, onLogout}){
 
   return e("div",{style:{minHeight:"100vh",background:C.bg,fontFamily:"'Noto Sans TC', sans-serif"}},
     // 頂部
-    e("div",{style:{background:C.primary,color:"white",padding:"14px 16px",position:"sticky",top:0,zIndex:30,display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}},
-      e("div",{style:{display:"flex",alignItems:"center",gap:12}},
-        e(YouanLogo,{size:42,color:C.bear}),
-        e("div",null,
-          e("div",{style:{fontSize:25,fontWeight:700}},"佑安管理介面　v3.2"),
-          e("div",{style:{fontSize:15,opacity:.8}},
-            me.name+"（"+me.role+"）",
-            e("span",{onClick:()=>setShowSup(true),style:{marginLeft:8,background:"rgba(255,255,255,.2)",padding:"2px 10px",borderRadius:20,fontSize:13,cursor:"pointer",whiteSpace:"nowrap"}},
-              "👁 "+(viewSup?("看："+viewSup):"全部個案")+" ▾")))),
-      e("div",{style:{display:"flex",alignItems:"center",gap:8,flexShrink:0}},
-        e("button",{onClick:()=>{setShowPw(true);setOldPw("");setNewPw("");setNewPw2("");setPwMsg("");},style:{flexShrink:0,background:"rgba(255,255,255,.15)",border:"1px solid rgba(255,255,255,.35)",color:"white",borderRadius:9,padding:"9px 14px",fontSize:16,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}},"🔑 改密碼"),
-        e("button",{onClick:onLogout,style:{flexShrink:0,background:"rgba(255,255,255,.15)",border:"1px solid rgba(255,255,255,.35)",color:"white",borderRadius:9,padding:"9px 16px",fontSize:16,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}},"登出"))),
+    e("div",{style:{background:C.primary,color:"white",padding:"12px 16px",position:"sticky",top:0,zIndex:30}},
+      // 第一排：Logo + 標題 + 改密碼/登出
+      e("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}},
+        e("div",{style:{display:"flex",alignItems:"center",gap:10}},
+          e(YouanLogo,{size:34,color:C.bear}),
+          e("div",null,
+            e("div",{style:{fontSize:22,fontWeight:700}},"佑安管理介面　v3.2"),
+            e("div",{style:{fontSize:14,opacity:.8}},me.name+"（"+me.role+"）"))),
+        e("div",{style:{display:"flex",alignItems:"center",gap:8,flexShrink:0}},
+          e("button",{onClick:()=>{setShowPw(true);setOldPw("");setNewPw("");setNewPw2("");setPwMsg("");},style:{flexShrink:0,background:"rgba(255,255,255,.15)",border:"1px solid rgba(255,255,255,.35)",color:"white",borderRadius:9,padding:"9px 14px",fontSize:16,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}},"🔑 改密碼"),
+          e("button",{onClick:onLogout,style:{flexShrink:0,background:"rgba(255,255,255,.15)",border:"1px solid rgba(255,255,255,.35)",color:"white",borderRadius:9,padding:"9px 16px",fontSize:16,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}},"登出"))),
+      // 第二排：視角切換鈕（整排）
+      e("button",{onClick:()=>setShowSup(true),style:{width:"100%",marginTop:10,background:"rgba(255,255,255,.2)",border:"1px solid rgba(255,255,255,.35)",color:"white",borderRadius:10,padding:"11px",fontSize:16,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:6}},
+        "👁 檢視視角："+(viewSup?viewSup:"管理員（全部）")+" ▾")),
     // Tab 列
-    e("div",{style:{display:"flex",background:C.card,borderBottom:`2px solid ${C.border}`,position:"sticky",top:74,zIndex:29}},
+    e("div",{style:{display:"flex",background:C.card,borderBottom:`2px solid ${C.border}`,position:"sticky",top:0,zIndex:29}},
       tabs.map(([key,label])=>e("button",{key:key,onClick:()=>setTab(key),style:{flex:1,padding:"16px 4px",border:"none",borderBottom:tab===key?`3px solid ${C.primary}`:"3px solid transparent",background:"none",color:tab===key?C.primary:C.textSub,fontSize:19,fontWeight:tab===key?700:500,cursor:"pointer",fontFamily:"inherit"}},label))),
     // 內容
     tab==="logs" && e(LogsTab,{me, viewSup, key:"logs_"+viewSup}),
@@ -1148,7 +1150,7 @@ function AdminMain({me, onLogout}){
         e("div",{style:{display:"flex",flexDirection:"column",gap:8}},
           // 管理員才有「全部」
           me.role==="管理員" && e("button",{onClick:()=>{setViewSup("");setShowSup(false);},
-            style:{textAlign:"left",background:viewSup===""?C.primary:C.card,color:viewSup===""?"white":C.text,border:`1.5px solid ${viewSup===""?C.primary:C.border}`,borderRadius:10,padding:"13px 16px",fontSize:17,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}},"🏠 全部個案"),
+            style:{textAlign:"left",background:viewSup===""?C.primary:C.card,color:viewSup===""?"white":C.text,border:`1.5px solid ${viewSup===""?C.primary:C.border}`,borderRadius:10,padding:"13px 16px",fontSize:17,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}},"🏠 管理員（看全部）"),
           supList.map((s,i)=>e("button",{key:i,onClick:()=>{setViewSup(s.name);setShowSup(false);},
             style:{textAlign:"left",background:viewSup===s.name?C.primary:C.card,color:viewSup===s.name?"white":C.text,border:`1.5px solid ${viewSup===s.name?C.primary:C.border}`,borderRadius:10,padding:"13px 16px",fontSize:17,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}},
             "👤 "+s.name+(s.name===me.name?"（我）":""))) ),
