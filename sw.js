@@ -1,16 +1,16 @@
-// 佑安服務日誌 Service Worker v35
-// 修正：iOS Safari 大檔案快取問題
-// 策略：安裝不快取（確保成功），第一次成功載入頁面時才寫入快取
+// 佑安服務日誌 Service Worker v41
+// 策略：網路優先 + 自動更新，員工免手動清快取
+// 安裝不快取大檔（iOS 相容），第一次成功載入才快取
 
-const CACHE_NAME = 'youan-journal-v35';
+const CACHE_NAME = 'youan-journal-v41';
 const INDEX_URL = '/youan-journal/index.html';
 
-// ── 安裝：不做任何快取，確保 SW 一定安裝成功 ──
+// ── 安裝：不快取，確保 SW 一定安裝成功 ──
 self.addEventListener('install', event => {
-  event.waitUntil(self.skipWaiting());
+  event.waitUntil(self.skipWaiting()); // 立即接管
 });
 
-// ── 啟動：清除舊快取，立即接管 ──
+// ── 啟動：清除所有舊快取，立即接管所有分頁 ──
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys()
@@ -27,18 +27,17 @@ self.addEventListener('fetch', event => {
   if (url.hostname.includes('script.google.com')) return;
   if (url.hostname.includes('fonts.googleapis.com') || url.hostname.includes('fonts.gstatic.com')) return;
 
-  // 導向佑安日誌頁面的請求
   const isAppPage =
     event.request.mode === 'navigate' ||
     url.pathname === '/youan-journal/' ||
     url.pathname === '/youan-journal/index.html';
 
   if (isAppPage) {
+    // 網路優先：有網路一定拿最新版，順便更新快取；沒網路才用快取
     event.respondWith(
-      fetch(event.request)
+      fetch(event.request, { cache: 'no-store' })  // no-store：強制抓最新，不吃瀏覽器快取
         .then(response => {
-          // 有網路：成功後寫入快取
-          if (response.ok) {
+          if (response && response.ok) {
             const r1 = response.clone();
             const r2 = response.clone();
             caches.open(CACHE_NAME).then(cache => {
@@ -49,7 +48,6 @@ self.addEventListener('fetch', event => {
           return response;
         })
         .catch(() => {
-          // 離線：從快取取出
           return caches.match(INDEX_URL)
             .then(cached => cached || caches.match('/youan-journal/'));
         })
