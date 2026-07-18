@@ -13,7 +13,7 @@
   #loading { text-align:center; padding:80px 20px; color:#6E6A5F; font-size:18px; }
 </style>
 <script>
-// Service Worker 註冊（v41 離線功能）
+// Service Worker 註冊（v42 離線功能）
 if('serviceWorker' in navigator){
   navigator.serviceWorker.register('/youan-journal/sw.js',{scope:'/youan-journal/'})
     .then(()=>console.log('[SW] 已註冊'))
@@ -366,7 +366,7 @@ async function callAPI(action, params = {}) {
 
 
 // ════════════════════════════════════════════
-// 佑安離線功能模組 (v41)
+// 佑安離線功能模組 (v42)
 // ════════════════════════════════════════════
 const CACHE_PREFIX = 'youan_';
 const SCHEDULE_KEY_PREFIX = CACHE_PREFIX + 'schedule_'; // key = prefix + empId + '_' + month + '_' + day
@@ -758,6 +758,30 @@ function App() {
   const handleOpen=idx=>{
     const s=dayList[idx]; setActiveIdx(idx);
     if(savedData[idx]){setSkin(savedData[idx].skin);setSkinNote(savedData[idx].skinNote||"");setCodeValues(savedData[idx].codeValues);setExtraCodes(savedData[idx].extraCodes||[]);setFromLastMap({});}
+    else if(s.saved&&s.saved.codeValues&&Object.keys(s.saved.codeValues).length>0){
+      // ★已送出：顯示當初真正填寫的內容，不走「帶入上次」
+      const sv=s.saved;
+      setSkin(sv.skin||"ok"); setSkinNote(sv.skinNote||"");
+      const init={},fl={},ext=[];
+      s.codes.forEach(c=>{
+        if(sv.codeValues[c.code]!==undefined&&sv.codeValues[c.code]!==""){
+          init[c.code]=sv.codeValues[c.code];
+        }else{
+          // 班表新增、但當初沒填過的碼 → 才帶入上次
+          const key=`${s.client}_${c.code}`;
+          const list=phrases[key]&&phrases[key].length>0?phrases[key]:byCode[c.code];
+          if(list&&list.length>0){init[c.code]=list[0].text;fl[c.code]=true;}
+        }
+      });
+      // 日誌有、但班表已無的碼（班表事後異動）也顯示出來，避免資料看不到
+      Object.keys(sv.codeValues).forEach(code=>{
+        if(!s.codes.find(c=>c.code===code)){
+          init[code]=sv.codeValues[code];
+          ext.push({code:code,name:code,qty:1});
+        }
+      });
+      setCodeValues(init); setFromLastMap(fl); setExtraCodes(ext);
+    }
     else{
       const ls=lastSkin[s.client];
       if(ls&&ls.skinNote){setSkin("prev");setSkinNote(ls.skinNote);}
@@ -780,6 +804,9 @@ function App() {
     return NOW_HOUR>=endHourOf(session.time);
   };
   const pickedDateStr=`${pickMonth}月${pickDay}日`;
+  // 填寫畫面標題用：顯示「所選日期」而非今天
+  const _pickWd=["日","一","二","三","四","五","六"][new Date(_now.getFullYear(),pickMonth-1,pickDay).getDay()];
+  const fillDateStr=`${_now.getFullYear()-1911}年${pickMonth}月${pickDay}日（${_pickWd}）`;
   const codesInSession=session?[...session.codes.map(c=>({...c,extra:false})),...extraCodes.map(c=>({...c,extra:true}))]:[];
   const allFilled=codesInSession.length>0&&codesInSession.every(c=>codeValues[c.code]?.trim());
 
@@ -855,7 +882,7 @@ function App() {
     React.createElement("div",{style:{background:C.primary,color:"white",padding:"16px 16px 14px",position:"sticky",top:0,zIndex:10}},
       React.createElement("div",{style:{display:"flex",alignItems:"center",justifyContent:"center",gap:10,marginBottom:6}},
         React.createElement(YouanLogo,{size:34,color:C.bear}),
-        React.createElement("div",{style:{fontSize:20,fontWeight:700,letterSpacing:.5,lineHeight:1.3}},"佑安服務日誌線上填寫系統 v41")),
+        React.createElement("div",{style:{fontSize:20,fontWeight:700,letterSpacing:.5,lineHeight:1.3}},"佑安服務日誌線上填寫系統 v42")),
       React.createElement("div",{style:{fontSize:21,opacity:.85,marginTop:6,textAlign:"center"}},today,"　現在 ",NOW_STR)),
     // 離線佇列提示橫幅
     (()=>{
@@ -1011,7 +1038,7 @@ function App() {
         React.createElement("div",{style:{display:"flex",alignItems:"baseline",gap:10,marginBottom:2,flexWrap:"wrap"}},
           React.createElement("span",{style:{fontSize:21,fontWeight:700}},session.client),
           React.createElement("span",{style:{fontSize:17,opacity:.85,whiteSpace:"nowrap"}},session.time)),
-        React.createElement("div",{style:{fontSize:17,opacity:.85,whiteSpace:"nowrap"}},today))),
+        React.createElement("div",{style:{fontSize:17,opacity:.85,whiteSpace:"nowrap"}},fillDateStr))),
     React.createElement("div",{style:{padding:"14px 14px 100px",display:"flex",flexDirection:"column",gap:14}},
       Object.keys(fromLastMap).length>0&&React.createElement("div",{style:{background:C.okLight,border:`1px solid ${C.ok}`,borderRadius:8,padding:"10px 14px",fontSize:18,color:C.ok}},"↩ 已自動帶入上次服務內容，請確認、增減或修改"),
       !canSubmitNow()&&React.createElement("div",{style:{background:C.warnLight,border:`1px solid ${C.warn}`,borderRadius:8,padding:"10px 14px",fontSize:18,color:C.warn}},"🕐 此班 ",session.time," 尚未結束，可先編輯，須等班次結束後才能送出"),
@@ -1034,7 +1061,7 @@ function App() {
     React.createElement("div",{style:{width:72,height:72,borderRadius:"50%",background:C.okLight,display:"flex",alignItems:"center",justifyContent:"center",fontSize:44,marginBottom:20}},"✓"),
     React.createElement("div",{style:{fontSize:27,fontWeight:700,color:C.text,marginBottom:8}},"已送出"),
     React.createElement("div",{style:{fontSize:19,color:C.textSub,marginBottom:4}},session.client,"　",session.time),
-    React.createElement("div",{style:{fontSize:18,color:C.textSub,marginBottom:8}},today),
+    React.createElement("div",{style:{fontSize:18,color:C.textSub,marginBottom:8}},fillDateStr),
     React.createElement("div",{style:{fontSize:17,color:C.ok,marginBottom:32,textAlign:"center",lineHeight:1.5}},"補填期（下月2日）前",React.createElement("br"),"都可回班次清單點「已送出·可修改」修改"),
     React.createElement("button",{onClick:()=>setScreen("list"),style:{background:C.primary,color:"white",border:"none",borderRadius:10,padding:"12px 32px",fontSize:20,fontWeight:600,cursor:"pointer"}},"回到班次清單"));
 }
