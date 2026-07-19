@@ -13,7 +13,7 @@
   #loading { text-align:center; padding:80px 20px; color:#6E6A5F; font-size:18px; }
 </style>
 <script>
-// Service Worker 註冊（v43 離線功能）
+// Service Worker 註冊（v44 離線功能）
 if('serviceWorker' in navigator){
   navigator.serviceWorker.register('/youan-journal/sw.js',{scope:'/youan-journal/'})
     .then(()=>console.log('[SW] 已註冊'))
@@ -366,7 +366,7 @@ async function callAPI(action, params = {}) {
 
 
 // ════════════════════════════════════════════
-// 佑安離線功能模組 (v43)
+// 佑安離線功能模組 (v44)
 // ════════════════════════════════════════════
 const CACHE_PREFIX = 'youan_';
 const SCHEDULE_KEY_PREFIX = CACHE_PREFIX + 'schedule_'; // key = prefix + empId + '_' + month + '_' + day
@@ -596,6 +596,7 @@ function App() {
   const [dayList,setDayList] = useState([]);
   const [phrases,setPhrases] = useState({});
   const [phrasesQty,setPhrasesQty] = useState({});   // ★個案_BA碼_支數
+  const [phrasesSlot,setPhrasesSlot] = useState({}); // ★個案_BA碼_支數_時段區間
   const [byCode,setByCode] = useState({});
   const [lastSkin,setLastSkin] = useState({});
   const [loadingDay,setLoadingDay] = useState(false);
@@ -719,6 +720,7 @@ function App() {
       if(cachedPhr){
         setPhrases(cachedPhr.phrases||{});
         setPhrasesQty(cachedPhr.phrasesQty||{});
+        setPhrasesSlot(cachedPhr.phrasesSlot||{});
         setByCode(cachedPhr.byCode||{});
         setLastSkin(cachedPhr.lastSkin||{});
       }
@@ -736,11 +738,12 @@ function App() {
       setSubmitted(subIdx);
       setPhrases(phR.ok?phR.phrases:{});
       setPhrasesQty(phR.ok?phR.phrasesQty||{}:{});
+      setPhrasesSlot(phR.ok?phR.phrasesSlot||{}:{});
       setByCode(phR.ok?phR.byCode||{}:{});
       setLastSkin(phR.ok?phR.lastSkin||{}:{});
       // 存入快取
       if(dayR.ok) cacheSchedule(empId,m,d,{day:days});
-      if(phR.ok)  cachePhrases(empId,{phrases:phR.phrases||{},phrasesQty:phR.phrasesQty||{},byCode:phR.byCode||{},lastSkin:phR.lastSkin||{}});
+      if(phR.ok)  cachePhrases(empId,{phrases:phR.phrases||{},phrasesQty:phR.phrasesQty||{},phrasesSlot:phR.phrasesSlot||{},byCode:phR.byCode||{},lastSkin:phR.lastSkin||{}});
     }catch(e){
       if(!cachedSched){ setDayList([]); setLoadError(true); }
       // 有快取就繼續用，不清空
@@ -758,6 +761,14 @@ function App() {
   // 點未填警示中的某天 → 跳過去
   const goToMissingDay=(d)=>{ changeDate(pickMonth,d); setMissingOpen(false); };
 
+  // 時段區間：早上/中午/下午/晚上（班表時間會挪動，用區間比對）
+  const slotOf=t=>{
+    const m=String(t||"").replace(/[～〜]/g,"~").match(/(\d{1,2}):/);
+    if(!m)return "";
+    const h=parseInt(m[1],10);
+    return h<11?"AM":h<13?"NOON":h<18?"PM":"NIGHT";
+  };
+
   const handleOpen=idx=>{
     const s=dayList[idx]; setActiveIdx(idx);
     if(savedData[idx]){setSkin(savedData[idx].skin);setSkinNote(savedData[idx].skinNote||"");setCodeValues(savedData[idx].codeValues);setExtraCodes(savedData[idx].extraCodes||[]);setFromLastMap({});}
@@ -772,8 +783,10 @@ function App() {
         }else{
           // 班表新增、但當初沒填過的碼 → 才帶入上次
           const key=`${s.client}_${c.code}`;
-          const qkey=`${key}_${c.qty||1}`;   // ★同碼不同支數＝不同服務
-          const list=(phrasesQty[qkey]&&phrasesQty[qkey].length>0)?phrasesQty[qkey]
+          const qkey=`${key}_${c.qty||1}`;              // 同碼不同支數＝不同服務
+          const skey=`${qkey}_${slotOf(s.time)}`;       // ★再依時段區間區分同天多班次
+          const list=(phrasesSlot[skey]&&phrasesSlot[skey].length>0)?phrasesSlot[skey]
+                    :(phrasesQty[qkey]&&phrasesQty[qkey].length>0)?phrasesQty[qkey]
                     :(phrases[key]&&phrases[key].length>0?phrases[key]:byCode[c.code]);
           if(list&&list.length>0){init[c.code]=list[0].text;fl[c.code]=true;}
         }
@@ -794,8 +807,10 @@ function App() {
       const init={},fl={};
       s.codes.forEach(c=>{
         const key=`${s.client}_${c.code}`;
-        const qkey=`${key}_${c.qty||1}`;   // ★同碼不同支數＝不同服務
-        const list=(phrasesQty[qkey]&&phrasesQty[qkey].length>0)?phrasesQty[qkey]
+        const qkey=`${key}_${c.qty||1}`;              // 同碼不同支數＝不同服務
+        const skey=`${qkey}_${slotOf(s.time)}`;       // ★再依時段區間區分同天多班次
+        const list=(phrasesSlot[skey]&&phrasesSlot[skey].length>0)?phrasesSlot[skey]
+                  :(phrasesQty[qkey]&&phrasesQty[qkey].length>0)?phrasesQty[qkey]
                   :(phrases[key]&&phrases[key].length>0?phrases[key]:byCode[c.code]);
         if(list&&list.length>0){init[c.code]=list[0].text;fl[c.code]=true;}
       });
@@ -889,7 +904,7 @@ function App() {
     React.createElement("div",{style:{background:C.primary,color:"white",padding:"16px 16px 14px",position:"sticky",top:0,zIndex:10}},
       React.createElement("div",{style:{display:"flex",alignItems:"center",justifyContent:"center",gap:10,marginBottom:6}},
         React.createElement(YouanLogo,{size:34,color:C.bear}),
-        React.createElement("div",{style:{fontSize:20,fontWeight:700,letterSpacing:.5,lineHeight:1.3}},"佑安服務日誌線上填寫系統 v43")),
+        React.createElement("div",{style:{fontSize:20,fontWeight:700,letterSpacing:.5,lineHeight:1.3}},"佑安服務日誌線上填寫系統 v44")),
       React.createElement("div",{style:{fontSize:21,opacity:.85,marginTop:6,textAlign:"center"}},today,"　現在 ",NOW_STR)),
     // 離線佇列提示橫幅
     (()=>{
@@ -1055,7 +1070,7 @@ function App() {
         (skin==="new"||skin==="prev")&&React.createElement("textarea",{value:skinNote,onChange:e=>setSkinNote(e.target.value),placeholder:"請說明異常狀況（位置、類型、尺寸）",rows:2,style:{marginTop:8,width:"100%",border:`1px solid ${C.warn}`,borderRadius:7,padding:"8px 10px",fontSize:19,fontFamily:"inherit",resize:"none",boxSizing:"border-box"}})),
       React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:10}},
         React.createElement(PillTitle,{icon:"📝"},"服務概況"),
-        codesInSession.map((c,i)=>React.createElement(CodeBlock,{key:c.code+i,codeItem:c,extra:c.extra,fromLast:fromLastMap[c.code],chips:(()=>{const k=`${session.client}_${c.code}`;const sameQty=phrasesQty[`${k}_${c.qty||1}`]||[];const exact=phrases[k]||[];const all=byCode[c.code]||[];const seen=new Set();const out=[];sameQty.forEach(p=>{if(!seen.has(p.text)){seen.add(p.text);out.push({t:p.text,freq:p.count,personal:true});}});exact.forEach(p=>{if(!seen.has(p.text)){seen.add(p.text);out.push({t:p.text,freq:p.count,personal:true});}});all.forEach(p=>{if(!seen.has(p.text)){seen.add(p.text);out.push({t:p.text,freq:p.count,personal:false});}});return out;})(),value:codeValues[c.code]||"",saved:savedTemplates[c.code],onChange:v=>{setCodeValues(p=>({...p,[c.code]:v}));setSavedTemplates(p=>({...p,[c.code]:false}));},onSaveTemplate:()=>setSavedTemplates(p=>({...p,[c.code]:true})),onRemove:()=>removeExtra(c.code)})),
+        codesInSession.map((c,i)=>React.createElement(CodeBlock,{key:c.code+i,codeItem:c,extra:c.extra,fromLast:fromLastMap[c.code],chips:(()=>{const k=`${session.client}_${c.code}`;const qk=`${k}_${c.qty||1}`;const sameSlot=phrasesSlot[`${qk}_${slotOf(session.time)}`]||[];const sameQty=phrasesQty[qk]||[];const exact=phrases[k]||[];const all=byCode[c.code]||[];const seen=new Set();const out=[];sameSlot.forEach(p=>{if(!seen.has(p.text)){seen.add(p.text);out.push({t:p.text,freq:p.count,personal:true});}});sameQty.forEach(p=>{if(!seen.has(p.text)){seen.add(p.text);out.push({t:p.text,freq:p.count,personal:true});}});exact.forEach(p=>{if(!seen.has(p.text)){seen.add(p.text);out.push({t:p.text,freq:p.count,personal:true});}});all.forEach(p=>{if(!seen.has(p.text)){seen.add(p.text);out.push({t:p.text,freq:p.count,personal:false});}});return out;})(),value:codeValues[c.code]||"",saved:savedTemplates[c.code],onChange:v=>{setCodeValues(p=>({...p,[c.code]:v}));setSavedTemplates(p=>({...p,[c.code]:false}));},onSaveTemplate:()=>setSavedTemplates(p=>({...p,[c.code]:true})),onRemove:()=>removeExtra(c.code)})),
         !allFilled&&React.createElement("div",{style:{background:C.warnLight,border:`1px solid #FCD34D`,borderRadius:8,padding:"10px 14px",fontSize:18,color:C.warn}},"⚠️ 尚有 ",codesInSession.filter(c=>!codeValues[c.code]?.trim()).length," 個項目未填寫")),
     React.createElement("div",{style:{position:"fixed",bottom:0,left:0,right:0,background:"white",borderTop:`1px solid ${C.border}`,padding:"12px 14px"}},
       React.createElement("button",{onClick:handleSubmit,disabled:busy||!(allFilled&&canSubmitNow()),style:{width:"100%",background:busy?C.ok:((allFilled&&canSubmitNow())?C.accent:C.border),color:busy?"white":((allFilled&&canSubmitNow())?"white":C.textSub),border:"none",borderRadius:10,padding:"14px",fontSize:21,fontWeight:700,cursor:(allFilled&&canSubmitNow())?"pointer":"default"}},busy?"處理中…":(canSubmitNow()?(allFilled?"確認送出　→":"請填寫所有項目"):"🔒 班次結束後才能送出")))));
