@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 佑安管理介面 admin.html v3.6 -- 漏填顯示天數+筆數  上傳班表(僅管理員)  漏填依照服員分組  漏填加照服員篩選  漏填修復(移除empId誤傳) + 移除異常分頁 + 視角切換 + 更改密碼 漏填三模式(週/月/區間) + 員工增刪改密碼 -->
+<!-- 佑安管理介面 admin.html v3.6.1 -- 漏填顯示天數+筆數  上傳班表(僅管理員)  漏填依照服員分組  漏填加照服員篩選  漏填修復(移除empId誤傳) + 移除異常分頁 + 視角切換 + 更改密碼 漏填三模式(週/月/區間) + 員工增刪改密碼 + 上傳班表自我去重(同年/月/日/員工/時段/個案只留一筆，修正來源檔重複解析導致班表重複) -->
 <html lang="zh-Hant">
 <head>
 <meta charset="UTF-8">
@@ -390,7 +390,7 @@ const YouanLogo = ({size=30}) => React.createElement("img",{src:LOGO_SRC,alt:"�
 
 const PillTitle = ({icon,children}) => React.createElement("div",{style:{display:"inline-flex",alignItems:"center",gap:8,background:C.primary,color:"white",borderRadius:22,padding:"7px 18px",fontSize:19,fontWeight:700}},icon&&React.createElement("span",{style:{fontSize:19}},icon),children);
 
-const FooterBar = () => React.createElement("div",{style:{background:C.primary,padding:"16px",display:"flex",alignItems:"center",justifyContent:"center",gap:10,marginTop:10}},React.createElement(YouanLogo,{size:32,color:C.bear}),React.createElement("div",{style:{textAlign:"center"}},React.createElement("div",{style:{color:"white",fontSize:16,fontWeight:700,letterSpacing:1}},"佑安居家長照機構"),React.createElement("div",{style:{color:"rgba(255,255,255,.6)",fontSize:9,letterSpacing:1}},"Youan Long Term Care Institutions　v3.6")));
+const FooterBar = () => React.createElement("div",{style:{background:C.primary,padding:"16px",display:"flex",alignItems:"center",justifyContent:"center",gap:10,marginTop:10}},React.createElement(YouanLogo,{size:32,color:C.bear}),React.createElement("div",{style:{textAlign:"center"}},React.createElement("div",{style:{color:"white",fontSize:16,fontWeight:700,letterSpacing:1}},"佑安居家長照機構"),React.createElement("div",{style:{color:"rgba(255,255,255,.6)",fontSize:9,letterSpacing:1}},"Youan Long Term Care Institutions　v3.6.1")));
 
 const endHourOf = t => { const m=t.match(/~(\d{2}):(\d{2})/); return m?parseInt(m[1])+parseInt(m[2])/60:24; };
 
@@ -1160,11 +1160,21 @@ function UploadTab({me}){
       const kept2=rows2.filter(r=>!punchDays.has(r[0]+"/"+r[1]+"/"+r[2]));
       const dropped=rows2.length-kept2.length;
       const allRows=rows1.concat(kept2);
-      const dayKeys=Array.from(new Set(allRows.map(r=>r[0]+"/"+r[1]+"/"+r[2])));
-      setUploadMsg("解析完成："+allRows.length+" 筆／"+dayKeys.length+" 天"+(dropped?("（重疊捨棄 "+dropped+" 筆）"):"")+"，上傳中…");
-      const resp=await fetch(API,{method:"POST",body:JSON.stringify({action:"uploadSchedule",empId:me.empId,role:me.role,rows:JSON.stringify(allRows)})});
+      // 自我去重：同 年/月/日/員工/時段/個案 只留一筆（來源檔可能把同一班解析兩次）
+      const seen=new Set();
+      const dedupRows=[];
+      for(const r of allRows){
+        const key=r[0]+"/"+r[1]+"/"+r[2]+"|"+String(r[3]||"").trim()+"|"+String(r[6]||"").replace(/[～〜]/g,"~").replace(/\s/g,"")+"|"+String(r[7]||"").trim();
+        if(seen.has(key))continue;
+        seen.add(key);
+        dedupRows.push(r);
+      }
+      const dupRemoved=allRows.length-dedupRows.length;
+      const dayKeys=Array.from(new Set(dedupRows.map(r=>r[0]+"/"+r[1]+"/"+r[2])));
+      setUploadMsg("解析完成："+dedupRows.length+" 筆／"+dayKeys.length+" 天"+(dupRemoved?("（去除重複 "+dupRemoved+" 筆）"):"")+(dropped?("（重疊捨棄 "+dropped+" 筆）"):"")+"，上傳中…");
+      const resp=await fetch(API,{method:"POST",body:JSON.stringify({action:"uploadSchedule",empId:me.empId,role:me.role,rows:JSON.stringify(dedupRows)})});
       const r=await resp.json();
-      setUploadMsg(r.ok?("✅ "+r.msg+(dropped?("；重疊捨棄 "+dropped+" 筆"):"")):("❌ "+r.msg));
+      setUploadMsg(r.ok?("✅ "+r.msg+(dupRemoved?("；去除重複 "+dupRemoved+" 筆"):"")+(dropped?("；重疊捨棄 "+dropped+" 筆"):"")):("❌ "+r.msg));
       if(r.ok){ setSchedFile1(null); setSchedFile2(null); }
     }catch(err){ setUploadMsg("❌ 上傳失敗："+err.message); }
     setUploading(false);
@@ -1236,7 +1246,7 @@ function AdminMain({me, onLogout}){
       // 第一排：Logo + 標題
       e("div",{style:{display:"flex",alignItems:"center",gap:10}},
         e(YouanLogo,{size:34,color:C.bear}),
-        e("div",{style:{fontSize:22,fontWeight:700}},"佑安管理介面　v3.6")),
+        e("div",{style:{fontSize:22,fontWeight:700}},"佑安管理介面　v3.6.1")),
       // 第二排：三按鈕橫排（視角切換 / 改密碼 / 登出）
       e("div",{style:{display:"flex",gap:8,marginTop:10}},
         e("button",{onClick:()=>setShowSup(true),style:{flex:2,background:"rgba(255,255,255,.2)",border:"1px solid rgba(255,255,255,.35)",color:"white",borderRadius:9,padding:"10px 6px",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}},
