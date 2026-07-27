@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 佑安管理介面 admin.html v3.4 -- 漏填依照服員分組  漏填加照服員篩選  漏填修復(移除empId誤傳) + 移除異常分頁 + 視角切換 + 更改密碼 漏填三模式(週/月/區間) + 員工增刪改密碼 -->
+<!-- 佑安管理介面 admin.html v3.5 -- 上傳班表(僅管理員)  漏填依照服員分組  漏填加照服員篩選  漏填修復(移除empId誤傳) + 移除異常分頁 + 視角切換 + 更改密碼 漏填三模式(週/月/區間) + 員工增刪改密碼 -->
 <html lang="zh-Hant">
 <head>
 <meta charset="UTF-8">
@@ -390,7 +390,7 @@ const YouanLogo = ({size=30}) => React.createElement("img",{src:LOGO_SRC,alt:"�
 
 const PillTitle = ({icon,children}) => React.createElement("div",{style:{display:"inline-flex",alignItems:"center",gap:8,background:C.primary,color:"white",borderRadius:22,padding:"7px 18px",fontSize:19,fontWeight:700}},icon&&React.createElement("span",{style:{fontSize:19}},icon),children);
 
-const FooterBar = () => React.createElement("div",{style:{background:C.primary,padding:"16px",display:"flex",alignItems:"center",justifyContent:"center",gap:10,marginTop:10}},React.createElement(YouanLogo,{size:32,color:C.bear}),React.createElement("div",{style:{textAlign:"center"}},React.createElement("div",{style:{color:"white",fontSize:16,fontWeight:700,letterSpacing:1}},"佑安居家長照機構"),React.createElement("div",{style:{color:"rgba(255,255,255,.6)",fontSize:9,letterSpacing:1}},"Youan Long Term Care Institutions　v3.4")));
+const FooterBar = () => React.createElement("div",{style:{background:C.primary,padding:"16px",display:"flex",alignItems:"center",justifyContent:"center",gap:10,marginTop:10}},React.createElement(YouanLogo,{size:32,color:C.bear}),React.createElement("div",{style:{textAlign:"center"}},React.createElement("div",{style:{color:"white",fontSize:16,fontWeight:700,letterSpacing:1}},"佑安居家長照機構"),React.createElement("div",{style:{color:"rgba(255,255,255,.6)",fontSize:9,letterSpacing:1}},"Youan Long Term Care Institutions　v3.5")));
 
 const endHourOf = t => { const m=t.match(/~(\d{2}):(\d{2})/); return m?parseInt(m[1])+parseInt(m[2])/60:24; };
 
@@ -1079,10 +1079,125 @@ function StaffTab({me, viewSup}){
           e(AdminBtn,{onClick:()=>setForm(null),color:"ghost",outline:true},"取消")))));
 }
 
+// 上傳班表 Tab（僅管理員）— 解析邏輯照搬規格文件，勿自創
+function UploadTab({me}){
+  const [schedFile1,setSchedFile1] = useState(null);
+  const [schedFile2,setSchedFile2] = useState(null);
+  const [uploading,setUploading] = useState(false);
+  const [uploadMsg,setUploadMsg] = useState("");
+
+  // 班表解析：支援「工具轉換後的可上傳檔」與「仁寶原始排班表」
+  const parseConvertedWb=(wb)=>{
+    const rows=[];
+    wb.SheetNames.forEach(name=>{
+      const d=XLSX.utils.sheet_to_json(wb.Sheets[name],{header:1,defval:""});
+      if(d.length<2)return;
+      const h=(d[0]||[]).map(x=>String(x||"").trim());
+      if(!(h[0]==="民國年"&&h[1]==="月"&&h[2]==="日"&&h[3]==="員工編號"))return;
+      for(let r=1;r<d.length;r++){
+        const row=d[r]; if(!row)continue;
+        const y=parseInt(row[0]),m=parseInt(row[1]),dd=parseInt(row[2]);
+        if(!y||!m||!dd)continue;
+        rows.push([y,m,dd,String(row[3]||"").trim(),String(row[4]||"").trim(),
+          parseInt(row[5])||1,String(row[6]||"").trim(),String(row[7]||"").trim(),
+          String(row[8]||"").trim(),String(row[9]||"").trim()]);
+      }
+    });
+    return rows;
+  };
+  const parseCompalWb=(wb)=>{
+    const rows=[];
+    wb.SheetNames.forEach(name=>{
+      const data=XLSX.utils.sheet_to_json(wb.Sheets[name],{header:1,defval:""});
+      if(data.length<5)return;
+      const row2=String(data[1][0]||"");
+      const empMatch=row2.match(/員工編號\s*(\S+)/);
+      if(!empMatch)return;
+      const eId=empMatch[1], eName=name;
+      const ymMatch=row2.match(/(\d{3})年(\d{1,2})月/);
+      const year=ymMatch?parseInt(ymMatch[1]):0;
+      const month=ymMatch?parseInt(ymMatch[2]):0;
+      for(let r=0;r<data.length-1;r++){
+        const row=data[r];
+        const dateCells=row.map(c=>{if(!c)return null;const m=String(c).match(/^\s*(\d{1,2})/);return m?parseInt(m[1]):null;});
+        if(dateCells.filter(d=>d&&d>=1&&d<=31).length<3)continue;
+        const svcRow=data[r+1];
+        for(let col=0;col<dateCells.length;col++){
+          const day=dateCells[col]; if(!day||col>=svcRow.length)continue;
+          const cell=String(svcRow[col]||""); if(!cell||cell===".")continue;
+          const pat=/(\d{1,2}:\d{2})~(\d{1,2}:\d{2})\s+([\u4e00-\u9fff]+)\s*\n?\[([^\]]+)\]\s*\n?((?:(?:BA|GA)\w+[^\n,]*×\d+[,\s]*)+)/g;
+          let mt,seq=1;
+          while((mt=pat.exec(cell))!==null){
+            const baItems=(mt[5].match(/((?:BA|GA)\d+)[^×]*×(\d+)/g)||[]).map(item=>{const m2=item.match(/((?:BA|GA)\d+)[^×]*×(\d+)/);return m2?m2[1]+"×"+m2[2]:item;});
+            rows.push([year,month,day,eId,eName,seq,mt[1]+"~"+mt[2],mt[3],mt[4],baItems.join(", ")]);
+            seq++;
+          }
+        }
+      }
+    });
+    return rows;
+  };
+  const parseSchedFile=async(file)=>{
+    const wb=XLSX.read(await file.arrayBuffer(),{type:"array"});
+    const c=parseConvertedWb(wb);
+    return c.length>0 ? c : parseCompalWb(wb);
+  };
+
+  // 執行上傳：①打卡優先，②預排班中重疊的日期自動捨棄
+  const doUploadSchedule=async()=>{
+    if(!schedFile1){ setUploadMsg("❌ 請先選擇①打卡時間班表"); return; }
+    setUploading(true); setUploadMsg("解析中…");
+    try{
+      const rows1=await parseSchedFile(schedFile1);
+      if(rows1.length===0){ setUploadMsg("❌ ①檔案解析為空，請確認檔案格式"); setUploading(false); return; }
+      let rows2=[];
+      if(schedFile2){
+        rows2=await parseSchedFile(schedFile2);
+        if(rows2.length===0){ setUploadMsg("❌ ②檔案解析為空，請確認檔案格式"); setUploading(false); return; }
+      }
+      const punchDays=new Set(rows1.map(r=>r[0]+"/"+r[1]+"/"+r[2]));
+      const kept2=rows2.filter(r=>!punchDays.has(r[0]+"/"+r[1]+"/"+r[2]));
+      const dropped=rows2.length-kept2.length;
+      const allRows=rows1.concat(kept2);
+      const dayKeys=Array.from(new Set(allRows.map(r=>r[0]+"/"+r[1]+"/"+r[2])));
+      setUploadMsg("解析完成："+allRows.length+" 筆／"+dayKeys.length+" 天"+(dropped?("（重疊捨棄 "+dropped+" 筆）"):"")+"，上傳中…");
+      const resp=await fetch(API,{method:"POST",body:JSON.stringify({action:"uploadSchedule",empId:me.empId,role:me.role,rows:JSON.stringify(allRows)})});
+      const r=await resp.json();
+      setUploadMsg(r.ok?("✅ "+r.msg+(dropped?("；重疊捨棄 "+dropped+" 筆"):"")):("❌ "+r.msg));
+      if(r.ok){ setSchedFile1(null); setSchedFile2(null); }
+    }catch(err){ setUploadMsg("❌ 上傳失敗："+err.message); }
+    setUploading(false);
+  };
+
+  return e("div",{style:{padding:14}},
+    e("div",{style:{background:"#fff",borderRadius:10,padding:16,border:`1.5px solid ${C.primary}`}},
+      e("div",{style:{fontSize:20,fontWeight:700,color:C.primary,marginBottom:6}},"📤 上傳班表"),
+      e("div",{style:{fontSize:15,color:C.textSub,marginBottom:14,lineHeight:1.6}},"仁寶原始排班表或轉換後的檔案都可以。日期重疊時以①打卡時間為準。"),
+      e("div",{style:{marginBottom:12}},
+        e("div",{style:{fontSize:16,fontWeight:700,marginBottom:6,color:C.text}},"① 打卡時間班表（已完成的日期）"),
+        e("input",{type:"file",accept:".xlsx,.xls",disabled:uploading,
+          onChange:ev=>{ setSchedFile1(ev.target.files[0]||null); setUploadMsg(""); },
+          style:{fontSize:15,width:"100%"}})),
+      e("div",{style:{marginBottom:16}},
+        e("div",{style:{fontSize:16,fontWeight:700,marginBottom:6,color:C.text}},"② 預排班班表（未來日期，可不選）"),
+        e("input",{type:"file",accept:".xlsx,.xls",disabled:uploading,
+          onChange:ev=>{ setSchedFile2(ev.target.files[0]||null); setUploadMsg(""); },
+          style:{fontSize:15,width:"100%"}})),
+      e("button",{onClick:doUploadSchedule,disabled:uploading||!schedFile1,
+        style:{width:"100%",padding:"14px",fontSize:18,fontWeight:700,borderRadius:9,border:"none",
+          background:(uploading||!schedFile1)?"#ccc":C.primary,color:"#fff",
+          cursor:(uploading||!schedFile1)?"default":"pointer",marginBottom:10,fontFamily:"inherit"}},
+        uploading?"處理中…":"開始上傳"),
+      uploadMsg&&e("div",{style:{fontSize:16,fontWeight:600,lineHeight:1.6,
+        color:uploadMsg.includes("✅")?C.ok:uploadMsg.includes("❌")?C.danger:C.textSub}},uploadMsg)));
+}
+
 // 主介面
 function AdminMain({me, onLogout}){
   const [tab,setTab] = useState("logs");
-  const tabs = [["logs","📋 日誌"],["missing","📝 漏填"],["staff","👥 名單"]];
+  const tabs = me.role==="管理員"
+    ? [["logs","📋 日誌"],["missing","📝 漏填"],["staff","👥 名單"],["upload","📤 班表"]]
+    : [["logs","📋 日誌"],["missing","📝 漏填"],["staff","👥 名單"]];
   // 更改密碼彈窗
   const [showPw,setShowPw] = useState(false);
   const [oldPw,setOldPw] = useState("");
@@ -1120,7 +1235,7 @@ function AdminMain({me, onLogout}){
       // 第一排：Logo + 標題
       e("div",{style:{display:"flex",alignItems:"center",gap:10}},
         e(YouanLogo,{size:34,color:C.bear}),
-        e("div",{style:{fontSize:22,fontWeight:700}},"佑安管理介面　v3.4")),
+        e("div",{style:{fontSize:22,fontWeight:700}},"佑安管理介面　v3.5")),
       // 第二排：三按鈕橫排（視角切換 / 改密碼 / 登出）
       e("div",{style:{display:"flex",gap:8,marginTop:10}},
         e("button",{onClick:()=>setShowSup(true),style:{flex:2,background:"rgba(255,255,255,.2)",border:"1px solid rgba(255,255,255,.35)",color:"white",borderRadius:9,padding:"10px 6px",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}},
@@ -1134,6 +1249,7 @@ function AdminMain({me, onLogout}){
     tab==="logs" && e(LogsTab,{me, viewSup, key:"logs_"+viewSup}),
     tab==="missing" && e(MissingTab,{me, viewSup, key:"missing_"+viewSup}),
     tab==="staff" && e(StaffTab,{me, viewSup, key:"staff_"+viewSup}),
+    tab==="upload" && me.role==="管理員" && e(UploadTab,{me, key:"upload"}),
 
     // 更改密碼彈窗
     showPw && e("div",{style:{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:50,display:"flex",alignItems:"center",justifyContent:"center",padding:20},onClick:()=>setShowPw(false)},
