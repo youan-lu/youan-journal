@@ -13,7 +13,7 @@
   #loading { text-align:center; padding:80px 20px; color:#6E6A5F; font-size:18px; }
 </style>
 <script>
-// Service Worker 註冊（v46 離線功能）
+// Service Worker 註冊（v47 離線功能）
 if('serviceWorker' in navigator){
   navigator.serviceWorker.register('/youan-journal/sw.js',{scope:'/youan-journal/'})
     .then(()=>console.log('[SW] 已註冊'))
@@ -366,7 +366,7 @@ async function callAPI(action, params = {}) {
 
 
 // ════════════════════════════════════════════
-// 佑安離線功能模組 (v46)
+// 佑安離線功能模組 (v47)
 // ════════════════════════════════════════════
 const CACHE_PREFIX = 'youan_';
 const SCHEDULE_KEY_PREFIX = CACHE_PREFIX + 'schedule_'; // key = prefix + empId + '_' + month + '_' + day
@@ -623,7 +623,9 @@ function App() {
   const [newPw2,setNewPw2] = useState("");
   const [pwMsg,setPwMsg] = useState("");
   // 未填警示
-  const [missingDays,setMissingDays] = useState([]);   // 本月未填日期陣列，如 [2,5,9]
+  const [missingDays,setMissingDays] = useState([]);   // 未填日期陣列，如 [2,5,9]
+  const [missingCount,setMissingCount] = useState(0);  // 未填筆數（班次數）
+  const [missingMonth,setMissingMonth] = useState(_now.getMonth()+1); // 目前警示查的月份
   const [missingOpen,setMissingOpen] = useState(false); // 警示框是否展開
   const [missingLoading,setMissingLoading] = useState(false);
   // 數位簽章
@@ -688,23 +690,26 @@ function App() {
   // 查本月未填（呼叫後端 adminGetMissing，帶 empId 只看本人）
   const loadMissing=async(empId,m)=>{
     setMissingLoading(true);
+    setMissingMonth(m);
     try{
-      // 產生本月 1號~今天 的日期清單（只查今天以前，今天也算）
+      // 產生該月 1號~截止日 的日期清單
+      // 當月：查到今天；非當月（例如月初補上月）：查整月
       const isCurMonth = (m === _now.getMonth()+1);
       const lastDay = isCurMonth ? _now.getDate() : new Date(_now.getFullYear(), m, 0).getDate();
       const dates=[];
       for(let dd=1; dd<=lastDay; dd++) dates.push({month:m, day:dd});
       const r=await callAPI("adminGetMissing",{empId, dates:JSON.stringify(dates)});
       if(r.ok && Array.isArray(r.missing)){
-        // 取出不重複的「日」
+        const inMonth = r.missing.filter(x=>parseInt(x.month)===m);
         const daySet={};
-        r.missing.forEach(x=>{ if(parseInt(x.month)===m) daySet[parseInt(x.day)]=true; });
+        inMonth.forEach(x=>{ daySet[parseInt(x.day)]=true; });
         const days=Object.keys(daySet).map(n=>parseInt(n)).sort((a,b)=>a-b);
         setMissingDays(days);
+        setMissingCount(inMonth.length);   // 筆數
       }else{
-        setMissingDays([]);
+        setMissingDays([]); setMissingCount(0);
       }
-    }catch(e){ setMissingDays([]); }
+    }catch(e){ setMissingDays([]); setMissingCount(0); }
     setMissingLoading(false);
   };
 
@@ -761,7 +766,11 @@ function App() {
     if(me){ loadDay(me.empId,m,d); if(monthChanged) loadMissing(me.empId,m); }
   };
   // 點未填警示中的某天 → 跳過去
-  const goToMissingDay=(d)=>{ changeDate(pickMonth,d); setMissingOpen(false); };
+  const goToMissingDay=(d)=>{ changeDate(missingMonth,d); setMissingOpen(false); };
+  // 切換警示查詢的月份（這月 / 上月）
+  const switchMissingMonth=(m)=>{ if(me) loadMissing(me.empId,m); setMissingOpen(true); };
+  const _curMonth=_now.getMonth()+1;
+  const _prevMonth=_curMonth===1?12:_curMonth-1;
 
   // ── 班表解析：支援「仁寶原始排班表」與「工具轉換後的可上傳檔」 ──
   const parseConvertedWb=(wb)=>{
@@ -989,7 +998,7 @@ function App() {
     React.createElement("div",{style:{background:C.primary,color:"white",padding:"16px 16px 14px",position:"sticky",top:0,zIndex:10}},
       React.createElement("div",{style:{display:"flex",alignItems:"center",justifyContent:"center",gap:10,marginBottom:6}},
         React.createElement(YouanLogo,{size:34,color:C.bear}),
-        React.createElement("div",{style:{fontSize:20,fontWeight:700,letterSpacing:.5,lineHeight:1.3}},"佑安服務日誌線上填寫系統 v46")),
+        React.createElement("div",{style:{fontSize:20,fontWeight:700,letterSpacing:.5,lineHeight:1.3}},"佑安服務日誌線上填寫系統 v47")),
       React.createElement("div",{style:{fontSize:21,opacity:.85,marginTop:6,textAlign:"center"}},today,"　現在 ",NOW_STR)),
     // 離線佇列提示橫幅
     (()=>{
@@ -1044,13 +1053,24 @@ function App() {
         uploading?"處理中…":"開始上傳"),
 
       uploadMsg&&React.createElement("div",{style:{fontSize:16,color:uploadMsg.includes("✅")?C.ok:uploadMsg.includes("❌")?C.danger:C.textSub,fontWeight:600,lineHeight:1.5}},uploadMsg)),
-    // 未填警示框（只在有未填時顯示）
-    missingDays.length>0 && React.createElement("div",{style:{margin:"0 14px 12px",background:"#FFF7ED",borderRadius:10,border:`1.5px solid ${C.warn}`,overflow:"hidden"}},
+    // 未填警示框
+    React.createElement("div",{style:{margin:"0 14px 12px",background:(missingDays.length>0?"#FFF7ED":C.card),borderRadius:10,border:`1.5px solid ${missingDays.length>0?C.warn:C.border}`,overflow:"hidden"}},
       React.createElement("div",{onClick:()=>setMissingOpen(o=>!o),style:{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 14px",cursor:"pointer"}},
-        React.createElement("div",{style:{fontSize:18,fontWeight:700,color:C.warn}},"\u26A0\uFE0F \u672C\u6708\u6709 ",missingDays.length," \u5929\u5C1A\u672A\u586B\u5BEB"),
-        React.createElement("span",{style:{fontSize:18,color:C.warn,fontWeight:700}},missingOpen?"\u2303":"\u203A")),
-      missingOpen && React.createElement("div",{style:{padding:"0 14px 12px",display:"flex",flexWrap:"wrap",gap:8}},
-        missingDays.map(d=>React.createElement("button",{key:d,onClick:()=>goToMissingDay(d),style:{background:"white",border:`1px solid ${C.warn}`,borderRadius:8,padding:"8px 14px",fontSize:17,fontWeight:700,color:C.warn,cursor:"pointer"}},pickMonth,"/",d," \u203A")))),
+        React.createElement("div",{style:{fontSize:18,fontWeight:700,color:missingDays.length>0?C.warn:C.textSub}},
+          missingLoading?"查詢中…":(missingDays.length>0
+            ? `\u26A0\uFE0F ${missingMonth}月有 ${missingDays.length} 天、共 ${missingCount} 筆尚未填寫`
+            : `\u2705 ${missingMonth}月已全部填寫`)),
+        React.createElement("span",{style:{fontSize:18,color:C.textSub,fontWeight:700}},missingOpen?"\u2303":"\u203A")),
+      missingOpen && React.createElement("div",{style:{padding:"0 14px 12px"}},
+        // 本月 / 上月 切換
+        React.createElement("div",{style:{display:"flex",gap:8,marginBottom:10}},
+          React.createElement("button",{onClick:()=>switchMissingMonth(_curMonth),style:{flex:1,background:missingMonth===_curMonth?C.accent:"white",color:missingMonth===_curMonth?"white":C.textSub,border:`1px solid ${C.border}`,borderRadius:8,padding:"8px",fontSize:16,fontWeight:700,cursor:"pointer"}},"本月（"+_curMonth+"月）"),
+          React.createElement("button",{onClick:()=>switchMissingMonth(_prevMonth),style:{flex:1,background:missingMonth===_prevMonth?C.accent:"white",color:missingMonth===_prevMonth?"white":C.textSub,border:`1px solid ${C.border}`,borderRadius:8,padding:"8px",fontSize:16,fontWeight:700,cursor:"pointer"}},"上月（"+_prevMonth+"月）")),
+        // 未填日期清單
+        missingDays.length>0
+          ? React.createElement("div",{style:{display:"flex",flexWrap:"wrap",gap:8}},
+              missingDays.map(d=>React.createElement("button",{key:d,onClick:()=>goToMissingDay(d),style:{background:"white",border:`1px solid ${C.warn}`,borderRadius:8,padding:"8px 14px",fontSize:17,fontWeight:700,color:C.warn,cursor:"pointer"}},missingMonth,"/",d," \u203A")))
+          : React.createElement("div",{style:{fontSize:16,color:C.textSub,textAlign:"center",padding:"8px"}},missingMonth+"月沒有尚未填寫的班次"))),
     // 日期選擇
     React.createElement("div",{style:{margin:"0 14px 12px",background:C.card,borderRadius:10,padding:"12px 14px",border:`1px solid ${C.border}`}},
       React.createElement("div",{style:{fontSize:17,color:C.textSub,marginBottom:8}},"服務日期"),
