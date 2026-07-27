@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 佑安管理介面 admin.html v3.5 -- 上傳班表(僅管理員)  漏填依照服員分組  漏填加照服員篩選  漏填修復(移除empId誤傳) + 移除異常分頁 + 視角切換 + 更改密碼 漏填三模式(週/月/區間) + 員工增刪改密碼 -->
+<!-- 佑安管理介面 admin.html v3.6 -- 漏填顯示天數+筆數  上傳班表(僅管理員)  漏填依照服員分組  漏填加照服員篩選  漏填修復(移除empId誤傳) + 移除異常分頁 + 視角切換 + 更改密碼 漏填三模式(週/月/區間) + 員工增刪改密碼 -->
 <html lang="zh-Hant">
 <head>
 <meta charset="UTF-8">
@@ -390,7 +390,7 @@ const YouanLogo = ({size=30}) => React.createElement("img",{src:LOGO_SRC,alt:"�
 
 const PillTitle = ({icon,children}) => React.createElement("div",{style:{display:"inline-flex",alignItems:"center",gap:8,background:C.primary,color:"white",borderRadius:22,padding:"7px 18px",fontSize:19,fontWeight:700}},icon&&React.createElement("span",{style:{fontSize:19}},icon),children);
 
-const FooterBar = () => React.createElement("div",{style:{background:C.primary,padding:"16px",display:"flex",alignItems:"center",justifyContent:"center",gap:10,marginTop:10}},React.createElement(YouanLogo,{size:32,color:C.bear}),React.createElement("div",{style:{textAlign:"center"}},React.createElement("div",{style:{color:"white",fontSize:16,fontWeight:700,letterSpacing:1}},"佑安居家長照機構"),React.createElement("div",{style:{color:"rgba(255,255,255,.6)",fontSize:9,letterSpacing:1}},"Youan Long Term Care Institutions　v3.5")));
+const FooterBar = () => React.createElement("div",{style:{background:C.primary,padding:"16px",display:"flex",alignItems:"center",justifyContent:"center",gap:10,marginTop:10}},React.createElement(YouanLogo,{size:32,color:C.bear}),React.createElement("div",{style:{textAlign:"center"}},React.createElement("div",{style:{color:"white",fontSize:16,fontWeight:700,letterSpacing:1}},"佑安居家長照機構"),React.createElement("div",{style:{color:"rgba(255,255,255,.6)",fontSize:9,letterSpacing:1}},"Youan Long Term Care Institutions　v3.6")));
 
 const endHourOf = t => { const m=t.match(/~(\d{2}):(\d{2})/); return m?parseInt(m[1])+parseInt(m[2])/60:24; };
 
@@ -860,7 +860,7 @@ function MissingTab({me, viewSup}){
 
     loading && e("div",{style:{textAlign:"center",padding:50,color:C.textSub,fontSize:17}},"查詢中…"),
     !loading && loaded && missing.length===0 && e("div",{style:{textAlign:"center",padding:60,color:C.ok,fontSize:19,lineHeight:1.8}},"✅",e("br"),"此範圍無漏填"),
-    !loading && missing.length>0 && e("div",{style:{fontSize:16,color:C.warn,marginBottom:12,fontWeight:600}},"共 "+missing.length+" 筆未填"),
+    !loading && missing.length>0 && e("div",{style:{fontSize:16,color:C.warn,marginBottom:12,fontWeight:600}},"共 "+(new Set(missing.map(m=>m.month+"/"+m.day)).size)+" 天、"+missing.length+" 筆未填"),
     fillMsg && e("div",{style:{fontSize:15,color:fillMsg.startsWith("✓")?C.ok:C.danger,marginBottom:10,fontWeight:600}},fillMsg),
     // 單筆卡片（共用）
     (()=>{
@@ -888,6 +888,7 @@ function MissingTab({me, viewSup}){
         grp[id].list.push(m);
       });
       const keys = Object.keys(grp).sort((a,b)=>grp[b].list.length-grp[a].list.length);
+      const dayCount = (list)=> new Set(list.map(m=>m.month+"/"+m.day)).size;
       return keys.map(id=>{
         const g = grp[id];
         const open = !!openGrp[id];
@@ -896,7 +897,7 @@ function MissingTab({me, viewSup}){
           e("div",{onClick:()=>setOpenGrp(p=>({...p,[id]:!p[id]})),
             style:{background:open?C.primary:C.card,color:open?"white":C.text,borderRadius:10,padding:"14px 16px",border:`1.5px solid ${open?C.primary:C.border}`,cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}},
             e("span",{style:{fontSize:19,fontWeight:700}},g.name),
-            e("span",{style:{fontSize:17,fontWeight:600,color:open?"white":C.warn}},"漏填 "+g.list.length+" 筆 "+(open?"▲":"▼"))),
+            e("span",{style:{fontSize:17,fontWeight:600,color:open?"white":C.warn}},"漏填 "+g.list.length+" 筆（"+dayCount(g.list)+" 天）"+(open?" ▲":" ▼"))),
           // 展開明細
           open && e("div",{style:{marginTop:8,paddingLeft:6}},
             g.list.map((m,i)=>entryCard(m,i,false)),
@@ -1235,7 +1236,7 @@ function AdminMain({me, onLogout}){
       // 第一排：Logo + 標題
       e("div",{style:{display:"flex",alignItems:"center",gap:10}},
         e(YouanLogo,{size:34,color:C.bear}),
-        e("div",{style:{fontSize:22,fontWeight:700}},"佑安管理介面　v3.5")),
+        e("div",{style:{fontSize:22,fontWeight:700}},"佑安管理介面　v3.6")),
       // 第二排：三按鈕橫排（視角切換 / 改密碼 / 登出）
       e("div",{style:{display:"flex",gap:8,marginTop:10}},
         e("button",{onClick:()=>setShowSup(true),style:{flex:2,background:"rgba(255,255,255,.2)",border:"1px solid rgba(255,255,255,.35)",color:"white",borderRadius:9,padding:"10px 6px",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}},
