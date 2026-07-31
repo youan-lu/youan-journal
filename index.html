@@ -591,6 +591,7 @@ function App() {
   const [loginPw,setLoginPw] = useState("");
   const [loginErr,setLoginErr] = useState("");
   const [busy,setBusy] = useState(false);
+  const [submitErr,setSubmitErr] = useState(""); // 送出失敗/維護模式時的錯誤提示
   const [pickMonth,setPickMonth] = useState(_now.getMonth()+1);
   const [pickDay,setPickDay] = useState(_now.getDate());
   const [dayList,setDayList] = useState([]);
@@ -929,34 +930,53 @@ function App() {
   const handleSubmit=async()=>{
     if(!allFilled||!canSubmitNow()||busy)return;
     setBusy(true);
+    setSubmitErr(""); // 清掉上次的錯誤提示
     const records=codesInSession.map(c=>({code:c.code,summary:codeValues[c.code]||"",extra:!!c.extra,qty:c.qty||1}));
     const payload={empId:me.empId,empName:me.name,serviceDate:`${_now.getFullYear()-1911}/${pickMonth}/${pickDay}`,client:session.client,time:session.time,bantype:session.bantype,skin,skinNote:(skin==="new"||skin==="prev")?skinNote:"",records,signature,abnormal:false};
-    // 先存入佇列（id 用來追蹤狀態）
-    const qId = enqueueSubmit(payload);
-    setQueueVersion(v=>v+1); // 觸發重繪
-    setSavedData(p=>({...p,[activeIdx]:{codeValues:{...codeValues},skin,skinNote,extraCodes:[...extraCodes]}}));
-    setSubmitted(prev=>prev.includes(activeIdx)?prev:[...prev,activeIdx]);
-    setScreen("list");
-    setBusy(false);
-    // 背景嘗試送出
+    // ★先真正呼叫後端，等結果回來，不要在還沒送出前就顯示「已送出」──
+    //   避免維護模式擋下、伺服器錯誤等情況被誤判成功，照服員卻不知道資料沒進去。
+    let submitRes=null, networkFailed=false;
     try{
-      const submitRes=await fetch(API,{method:"POST",body:JSON.stringify({action:"submit",data:JSON.stringify(payload)})}).then(r=>r.json()).catch(()=>null);
-      if(submitRes&&submitRes.ok){
-        updateQueueItem(qId,{status:'sent',sentAt:Date.now()});
-        loadMissing(me.empId,pickMonth); // 送出成功 → 更新未填警示
-        // 儲存範本（非同步）
-        for(const c of codesInSession){
-          if(savedTemplates[c.code]&&codeValues[c.code]){
-            fetch(API,{method:"POST",body:JSON.stringify({action:"savePhrase",empId:me.empId,empName:me.name,client:session.client,code:c.code,phrase:codeValues[c.code]})}).catch(()=>{});
-          }
-        }
-      } else {
-        updateQueueItem(qId,{status:'failed',failMsg:(submitRes&&submitRes.msg)||'伺服器錯誤'});
-      }
+      submitRes=await fetch(API,{method:"POST",body:JSON.stringify({action:"submit",data:JSON.stringify(payload)})}).then(r=>r.json());
     }catch(e){
-      updateQueueItem(qId,{status:'failed',failMsg:'網路錯誤，待補傳'});
+      networkFailed=true; // 真正連不上網路，才走離線佇列補傳，不是伺服器主動拒絕
     }
-    setQueueVersion(v=>v+1);
+
+    if(submitRes&&submitRes.maintenance){
+      // 維護模式：後端明確拒絕，清楚告知，不進佇列（避免維護解除後自動補傳一堆舊資料）
+      setBusy(false);
+      setSubmitErr(submitRes.msg||"系統測試維護中，暫停接受填寫，請稍後再試");
+      return;
+    }
+    if(submitRes&&submitRes.ok){
+      // 後端確認成功，才顯示已送出、切回列表
+      setSavedData(p=>({...p,[activeIdx]:{codeValues:{...codeValues},skin,skinNote,extraCodes:[...extraCodes]}}));
+      setSubmitted(prev=>prev.includes(activeIdx)?prev:[...prev,activeIdx]);
+      setScreen("list");
+      setBusy(false);
+      loadMissing(me.empId,pickMonth); // 送出成功 → 更新未填警示
+      for(const c of codesInSession){
+        if(savedTemplates[c.code]&&codeValues[c.code]){
+          fetch(API,{method:"POST",body:JSON.stringify({action:"savePhrase",empId:me.empId,empName:me.name,client:session.client,code:c.code,phrase:codeValues[c.code]})}).catch(()=>{});
+        }
+      }
+      return;
+    }
+    if(networkFailed){
+      // 真正離線 → 存入佇列，之後有網路自動補傳，維持原本的離線能力
+      const qId = enqueueSubmit(payload);
+      setQueueVersion(v=>v+1);
+      setSavedData(p=>({...p,[activeIdx]:{codeValues:{...codeValues},skin,skinNote,extraCodes:[...extraCodes]}}));
+      setSubmitted(prev=>prev.includes(activeIdx)?prev:[...prev,activeIdx]);
+      setScreen("list");
+      setBusy(false);
+      updateQueueItem(qId,{status:'pending',failMsg:'目前離線，將於恢復連線後自動補傳'});
+      setQueueVersion(v=>v+1);
+      return;
+    }
+    // 有連上網路，但伺服器明確回報失敗（非維護模式）→ 清楚告知，留在原畫面讓照服員決定要不要重試
+    setBusy(false);
+    setSubmitErr((submitRes&&submitRes.msg)||"送出失敗，請稍後再試");
   };
 
   const addExtra=c=>{
@@ -1152,6 +1172,7 @@ function App() {
         codesInSession.map((c,i)=>React.createElement(CodeBlock,{key:c.code+i,codeItem:c,extra:c.extra,fromLast:fromLastMap[c.code],chips:(()=>{const k=`${session.client}_${c.code}`;const qk=`${k}_${c.qty||1}`;const sameSlot=phrasesSlot[`${qk}_${slotOf(session.time)}`]||[];const sameQty=phrasesQty[qk]||[];const exact=phrases[k]||[];const all=byCode[c.code]||[];const seen=new Set();const out=[];sameSlot.forEach(p=>{if(!seen.has(p.text)){seen.add(p.text);out.push({t:p.text,freq:p.count,personal:true});}});sameQty.forEach(p=>{if(!seen.has(p.text)){seen.add(p.text);out.push({t:p.text,freq:p.count,personal:true});}});exact.forEach(p=>{if(!seen.has(p.text)){seen.add(p.text);out.push({t:p.text,freq:p.count,personal:true});}});all.forEach(p=>{if(!seen.has(p.text)){seen.add(p.text);out.push({t:p.text,freq:p.count,personal:false});}});return out;})(),value:codeValues[c.code]||"",saved:savedTemplates[c.code],onChange:v=>{setCodeValues(p=>({...p,[c.code]:v}));setSavedTemplates(p=>({...p,[c.code]:false}));},onSaveTemplate:()=>setSavedTemplates(p=>({...p,[c.code]:true})),onRemove:()=>removeExtra(c.code)})),
         !allFilled&&React.createElement("div",{style:{background:C.warnLight,border:`1px solid #FCD34D`,borderRadius:8,padding:"10px 14px",fontSize:18,color:C.warn}},"⚠️ 尚有 ",codesInSession.filter(c=>!codeValues[c.code]?.trim()).length," 個項目未填寫")),
     React.createElement("div",{style:{position:"fixed",bottom:0,left:0,right:0,background:"white",borderTop:`1px solid ${C.border}`,padding:"12px 14px"}},
+      submitErr&&React.createElement("div",{style:{background:"#FEE2E2",border:"1px solid #EF4444",borderRadius:8,padding:"10px 14px",fontSize:17,color:"#B91C1C",marginBottom:10,fontWeight:600}},"⚠️ ",submitErr,React.createElement("div",{style:{fontSize:14,fontWeight:400,marginTop:4,color:"#7F1D1D"}},"這筆尚未送出，請確認狀況後再按一次送出")),
       React.createElement("button",{onClick:handleSubmit,disabled:busy||!(allFilled&&canSubmitNow()),style:{width:"100%",background:busy?C.ok:((allFilled&&canSubmitNow())?C.accent:C.border),color:busy?"white":((allFilled&&canSubmitNow())?"white":C.textSub),border:"none",borderRadius:10,padding:"14px",fontSize:21,fontWeight:700,cursor:(allFilled&&canSubmitNow())?"pointer":"default"}},busy?"處理中…":(canSubmitNow()?(allFilled?"確認送出　→":"請填寫所有項目"):"🔒 班次結束後才能送出")))));
 
   // ── 送出完成 ──
