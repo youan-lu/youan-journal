@@ -1228,6 +1228,32 @@ function AdminMain({me, onLogout}){
       }catch(ex){}
     })();
   }, []);
+  // 維護模式：讀取目前狀態，管理員可一鍵切換（不用改任何程式碼、不用重新部署）
+  const [maintOn,setMaintOn] = useState(false);
+  const [maintBusy,setMaintBusy] = useState(false);
+  React.useEffect(()=>{
+    (async()=>{
+      try{
+        const r = await adminAPI("getMaintenanceMode",{});
+        if(r.ok) setMaintOn(!!r.maintenance);
+      }catch(ex){}
+    })();
+  }, []);
+  async function toggleMaintenance(){
+    if(me.role!=="管理員") return;
+    const next = !maintOn;
+    const confirmMsg = next
+      ? "確定要開啟維護模式嗎？開啟後，照服員將暫時無法送出服務日誌。"
+      : "確定要關閉維護模式，恢復照服員正常送出功能嗎？";
+    if(!window.confirm(confirmMsg)) return;
+    setMaintBusy(true);
+    try{
+      const r = await adminAPI("setMaintenanceMode",{role:me.role,on:next?"true":"false"});
+      if(r.ok) setMaintOn(next);
+      else alert(r.msg||"切換失敗");
+    }catch(ex){ alert("連線失敗"); }
+    setMaintBusy(false);
+  }
   async function doChangePw(){
     if(newPw!==newPw2){ setPwMsg("兩次新密碼不一致"); return; }
     if(newPw.length<4){ setPwMsg("新密碼至少 4 碼"); return; }
@@ -1247,6 +1273,19 @@ function AdminMain({me, onLogout}){
       e("div",{style:{display:"flex",alignItems:"center",gap:10}},
         e(YouanLogo,{size:34,color:C.bear}),
         e("div",{style:{fontSize:22,fontWeight:700}},"佑安管理介面　v3.6.1")),
+      // 維護模式狀態列（僅管理員看得到、可操作，點一下即可切換，不用改任何程式碼、不用重新部署）
+      me.role==="管理員" && e("div",{
+        onClick: maintBusy ? undefined : toggleMaintenance,
+        style:{
+          marginTop:8, padding:"9px 12px", borderRadius:9, cursor: maintBusy?"wait":"pointer",
+          display:"flex", alignItems:"center", justifyContent:"space-between",
+          background: maintOn ? "#d64545" : "rgba(255,255,255,.15)",
+          border: maintOn ? "1px solid #ffb3b3" : "1px solid rgba(255,255,255,.35)"
+        }
+      },
+        e("span",{style:{fontSize:14,fontWeight:600}},
+          maintOn ? "🔴 維護模式已開啟（照服員無法送出）" : "🟢 系統正常運作中"),
+        e("span",{style:{fontSize:13,textDecoration:"underline"}}, maintBusy?"處理中…":"點擊切換")),
       // 第二排：三按鈕橫排（視角切換 / 改密碼 / 登出）
       e("div",{style:{display:"flex",gap:8,marginTop:10}},
         e("button",{onClick:()=>setShowSup(true),style:{flex:2,background:"rgba(255,255,255,.2)",border:"1px solid rgba(255,255,255,.35)",color:"white",borderRadius:9,padding:"10px 6px",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}},
