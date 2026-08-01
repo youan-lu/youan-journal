@@ -427,7 +427,22 @@ function findQueueItem(empId, serviceDate, client){
 }
 
 // ── 嘗試補傳佇列（背景執行） ──
+// ★7/31深夜：加上執行中的鎖。flushQueue 會被多個時機各自觸發（網路恢復、
+//   切回頁面可見、App載入、手動重試），如果剛好在同一時間點被觸發兩次，
+//   後段還沒把佇列項目狀態更新成 sent 之前，第二次呼叫可能重複讀到同一筆
+//   pending、把同一筆資料再送一次。現在後端 submit 已改成直接寫入、不做
+//   比對防護，這種情況會變成真正的重複，所以在前端加這道鎖擋掉同時執行。
+let _flushQueueRunning = false;
 async function flushQueue(setQueueVersion){
+  if(_flushQueueRunning) return;   // ★已經有一輪在跑，這次直接跳過
+  _flushQueueRunning = true;
+  try{
+    await _flushQueueInner(setQueueVersion);
+  } finally {
+    _flushQueueRunning = false;
+  }
+}
+async function _flushQueueInner(setQueueVersion){
   const q = loadQueue();
   const pending = q.filter(i => i.status==='pending' || i.status==='failed');
   if(!pending.length) return;
