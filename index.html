@@ -465,6 +465,11 @@ async function _flushQueueInner(setQueueVersion){
 const _now = new Date();
 const NOW_HOUR = _now.getHours() + _now.getMinutes() / 60;
 const NOW_STR = `${String(_now.getHours()).padStart(2,"0")}:${String(_now.getMinutes()).padStart(2,"0")}`;
+// ★8/1發現：月份選單原本寫死[5,6,7]，8月開始後選單裡沒有8月可選（雖然「今天」
+//   快速連結還是能正常載入，但手動切換月份會卡住）。改成動態算「現在月份往前
+//   推2個月」，共3個月選項，之後每個月都會自動對，不用再手動改。
+const _nowMonthNum = _now.getMonth()+1;
+const MONTH_OPTS = [2,1,0].map(back=>{ let m=_nowMonthNum-back; while(m<1) m+=12; while(m>12) m-=12; return m; });
 const cleanName = n => n.replace(/\(.*?\)/g,"");
 
 const ALL_CODES = [
@@ -1110,7 +1115,7 @@ function App() {
     React.createElement("div",{style:{margin:"0 14px 12px",background:C.card,borderRadius:10,padding:"12px 14px",border:`1px solid ${C.border}`}},
       React.createElement("div",{style:{fontSize:17,color:C.textSub,marginBottom:8}},"服務日期"),
       React.createElement("div",{style:{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}},
-        React.createElement("select",{value:pickMonth,onChange:e=>changeDate(parseInt(e.target.value),pickDay),style:{fontSize:19,padding:"8px 10px",borderRadius:8,border:`1px solid ${C.border}`,background:"white"}},[5,6,7].map(m=>React.createElement("option",{key:m,value:m},m,"月"))),
+        React.createElement("select",{value:pickMonth,onChange:e=>changeDate(parseInt(e.target.value),pickDay),style:{fontSize:19,padding:"8px 10px",borderRadius:8,border:`1px solid ${C.border}`,background:"white"}},MONTH_OPTS.map(m=>React.createElement("option",{key:m,value:m},m,"月"))),
         React.createElement("select",{value:pickDay,onChange:e=>changeDate(pickMonth,parseInt(e.target.value)),style:{fontSize:19,padding:"8px 10px",borderRadius:8,border:`1px solid ${C.border}`,background:"white"}},Array.from({length:31},(_,i)=>i+1).map(d=>React.createElement("option",{key:d,value:d},d,"日"))),
         isToday&&React.createElement("span",{style:{fontSize:16,color:C.ok,fontWeight:600}},"今天"))),
     // 班次清單
