@@ -1254,6 +1254,34 @@ function AdminMain({me, onLogout}){
     }catch(ex){ alert("連線失敗"); }
     setMaintBusy(false);
   }
+  // 月份鎖定：本月/上月/歷史 三段各自獨立開關。跟維護模式不同——只擋照服員對
+  // 已鎖定月份的送出/修改，不擋管理員自己的操作。例如7月已核對整理好，鎖住
+  // 「上月」就能避免照服員誤觸修改，8月照常正常填寫；8/5要修正7月時再解鎖。
+  const [monthLock,setMonthLockState] = useState({cur:false,prev:false,hist:false});
+  const [monthLockBusyField,setMonthLockBusyField] = useState("");
+  React.useEffect(()=>{
+    (async()=>{
+      try{
+        const r = await adminAPI("getMonthLock",{});
+        if(r.ok) setMonthLockState({cur:!!r.cur,prev:!!r.prev,hist:!!r.hist});
+      }catch(ex){}
+    })();
+  }, []);
+  async function toggleMonthLock(field, label){
+    if(me.role!=="管理員") return;
+    const next = !monthLock[field];
+    const confirmMsg = next
+      ? ("確定要鎖定「"+label+"」嗎？鎖定後，照服員將無法對這個範圍的班次送出/修改。")
+      : ("確定要解鎖「"+label+"」嗎？解鎖後，照服員可以正常送出/修改這個範圍的班次。");
+    if(!window.confirm(confirmMsg)) return;
+    setMonthLockBusyField(field);
+    try{
+      const r = await adminAPI("setMonthLock",{role:me.role,field,on:next?"true":"false"});
+      if(r.ok) setMonthLockState(p=>({...p,[field]:next}));
+      else alert(r.msg||"切換失敗");
+    }catch(ex){ alert("連線失敗"); }
+    setMonthLockBusyField("");
+  }
   async function doChangePw(){
     if(newPw!==newPw2){ setPwMsg("兩次新密碼不一致"); return; }
     if(newPw.length<4){ setPwMsg("新密碼至少 4 碼"); return; }
@@ -1286,6 +1314,20 @@ function AdminMain({me, onLogout}){
         e("span",{style:{fontSize:14,fontWeight:600}},
           maintOn ? "🔴 維護模式已開啟（照服員無法送出）" : "🟢 系統正常運作中"),
         e("span",{style:{fontSize:13,textDecoration:"underline"}}, maintBusy?"處理中…":"點擊切換")),
+      // 月份鎖定：本月/上月/歷史 三個獨立小開關，鎖定=擋照服員送出/修改，不擋管理員
+      me.role==="管理員" && e("div",{style:{marginTop:8, display:"flex", gap:6}},
+        [["cur","本月"],["prev","上月"],["hist","歷史"]].map(([field,label])=>
+          e("div",{
+            key:field,
+            onClick: monthLockBusyField ? undefined : ()=>toggleMonthLock(field,label),
+            style:{
+              flex:1, padding:"7px 4px", borderRadius:8, textAlign:"center",
+              cursor: monthLockBusyField?"wait":"pointer",
+              fontSize:13, fontWeight:600,
+              background: monthLock[field] ? "#d64545" : "rgba(255,255,255,.15)",
+              border: monthLock[field] ? "1px solid #ffb3b3" : "1px solid rgba(255,255,255,.35)"
+            }
+          }, (monthLock[field]?"🔒 ":"🔓 ")+label+(monthLockBusyField===field?"…":"")))),
       // 第二排：三按鈕橫排（視角切換 / 改密碼 / 登出）
       e("div",{style:{display:"flex",gap:8,marginTop:10}},
         e("button",{onClick:()=>setShowSup(true),style:{flex:2,background:"rgba(255,255,255,.2)",border:"1px solid rgba(255,255,255,.35)",color:"white",borderRadius:9,padding:"10px 6px",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}},
