@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 佑安管理介面 admin.html v3.7 -- 漏填顯示天數+筆數  上傳班表(僅管理員)  漏填依照服員分組  漏填加照服員篩選  漏填修復(移除empId誤傳) + 移除異常分頁 + 視角切換 + 更改密碼 漏填三模式(週/月/區間) + 員工增刪改密碼 + 上傳班表自我去重(同年/月/日/員工/時段/個案只留一筆，修正來源檔重複解析導致班表重複) + 維護模式開關(管理員一鍵暫停照服員送出功能) -->
+<!-- 佑安管理介面 admin.html v3.8 -- 漏填顯示天數+筆數  上傳班表(僅管理員)  漏填依照服員分組  漏填加照服員篩選  漏填修復(移除empId誤傳) + 移除異常分頁 + 視角切換 + 更改密碼 漏填三模式(週/月/區間) + 員工增刪改密碼 + 上傳班表自我去重(同年/月/日/員工/時段/個案只留一筆，修正來源檔重複解析導致班表重複) + 維護模式開關(管理員一鍵暫停照服員送出功能) + 8/5修：漏填補填改成只補真正缺的那一碼(帶code參數)，不再整個時段全部BA碼重寫，避免重複寫入已存在的碼 -->
 <html lang="zh-Hant">
 <head>
 <meta charset="UTF-8">
@@ -390,7 +390,7 @@ const YouanLogo = ({size=30}) => React.createElement("img",{src:LOGO_SRC,alt:"�
 
 const PillTitle = ({icon,children}) => React.createElement("div",{style:{display:"inline-flex",alignItems:"center",gap:8,background:C.primary,color:"white",borderRadius:22,padding:"7px 18px",fontSize:19,fontWeight:700}},icon&&React.createElement("span",{style:{fontSize:19}},icon),children);
 
-const FooterBar = () => React.createElement("div",{style:{background:C.primary,padding:"16px",display:"flex",alignItems:"center",justifyContent:"center",gap:10,marginTop:10}},React.createElement(YouanLogo,{size:32,color:C.bear}),React.createElement("div",{style:{textAlign:"center"}},React.createElement("div",{style:{color:"white",fontSize:16,fontWeight:700,letterSpacing:1}},"佑安居家長照機構"),React.createElement("div",{style:{color:"rgba(255,255,255,.6)",fontSize:9,letterSpacing:1}},"Youan Long Term Care Institutions　v3.7")));
+const FooterBar = () => React.createElement("div",{style:{background:C.primary,padding:"16px",display:"flex",alignItems:"center",justifyContent:"center",gap:10,marginTop:10}},React.createElement(YouanLogo,{size:32,color:C.bear}),React.createElement("div",{style:{textAlign:"center"}},React.createElement("div",{style:{color:"white",fontSize:16,fontWeight:700,letterSpacing:1}},"佑安居家長照機構"),React.createElement("div",{style:{color:"rgba(255,255,255,.6)",fontSize:9,letterSpacing:1}},"Youan Long Term Care Institutions　v3.8")));
 
 const endHourOf = t => { const m=t.match(/~(\d{2}):(\d{2})/); return m?parseInt(m[1])+parseInt(m[2])/60:24; };
 
@@ -747,14 +747,15 @@ function MissingTab({me, viewSup}){
 
   // 補填單筆
   async function fillOne(m){
-    const key = m.month+"/"+m.day+"|"+m.empId+"|"+m.client+"|"+(m.time||"");
+    const key = m.month+"/"+m.day+"|"+m.empId+"|"+m.client+"|"+(m.time||"")+"|"+(m.code||"");
     setFillingKey(key); setFillMsg("");
     try{
       const r = await adminAPI("adminFillMissing",{role:me.role,empId:me.empId,
-        month:m.month, day:m.day, client:m.client, time:m.time, targetEmpId:m.empId});
+        month:m.month, day:m.day, client:m.client, time:m.time, targetEmpId:m.empId, code:m.code});
       if(r.ok){
-        // 從清單移除這筆
-        setMissing(prev=>prev.filter(x=>(x.month+"/"+x.day+"|"+x.empId+"|"+x.client+"|"+(x.time||""))!==key));
+        // 從清單移除這筆（★8/5修：key加入code，只移除真正補到的那一筆，
+        //   不會因為同一時段還有別的缺碼卡片，key相同而被一起誤刪）
+        setMissing(prev=>prev.filter(x=>(x.month+"/"+x.day+"|"+x.empId+"|"+x.client+"|"+(x.time||"")+"|"+(x.code||""))!==key));
       } else setFillMsg(r.msg||"補填失敗");
     }catch(ex){ setFillMsg("連線失敗"); }
     setFillingKey("");
@@ -769,7 +770,7 @@ function MissingTab({me, viewSup}){
     for(const m of list){
       try{
         const r = await adminAPI("adminFillMissing",{role:me.role,empId:me.empId,
-          month:m.month, day:m.day, client:m.client, time:m.time, targetEmpId:m.empId});
+          month:m.month, day:m.day, client:m.client, time:m.time, targetEmpId:m.empId, code:m.code});
         if(r.ok) done++; else fail++;
       }catch(ex){ fail++; }
     }
@@ -865,13 +866,14 @@ function MissingTab({me, viewSup}){
     // 單筆卡片（共用）
     (()=>{
       const entryCard = (m,i,showName)=>{
-        const key = m.month+"/"+m.day+"|"+m.empId+"|"+m.client+"|"+(m.time||"");
+        const key = m.month+"/"+m.day+"|"+m.empId+"|"+m.client+"|"+(m.time||"")+"|"+(m.code||"");
         const busy = fillingKey===key;
         return e("div",{key:i,style:{background:C.card,borderRadius:10,marginBottom:8,padding:"12px 14px",border:`1px solid ${C.border}`}},
           e("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}},
             e("div",null,
               showName && e("span",{style:{fontSize:18,fontWeight:700,color:C.text,marginRight:10}},m.empName||m.worker||m.empId),
-              e("span",{style:{fontSize:16,color:C.textSub}},(m.month||"")+"/"+(m.day||"")+" "+(m.time||""))),
+              e("span",{style:{fontSize:16,color:C.textSub}},(m.month||"")+"/"+(m.day||"")+" "+(m.time||"")),
+              m.code && e("span",{style:{fontSize:14,color:C.warn,marginLeft:8,fontWeight:600}},"缺 "+m.code)),
             e("span",{style:{fontSize:17,color:C.warn,fontWeight:600}},m.client)),
           e("div",{style:{marginTop:10,textAlign:"right"}},
             e("button",{onClick:()=>fillOne(m),disabled:busy||filling,
@@ -1300,7 +1302,7 @@ function AdminMain({me, onLogout}){
       // 第一排：Logo + 標題
       e("div",{style:{display:"flex",alignItems:"center",gap:10}},
         e(YouanLogo,{size:34,color:C.bear}),
-        e("div",{style:{fontSize:22,fontWeight:700}},"佑安管理介面　v3.7")),
+        e("div",{style:{fontSize:22,fontWeight:700}},"佑安管理介面　v3.8")),
       // 維護模式狀態列（僅管理員看得到、可操作，點一下即可切換，不用改任何程式碼、不用重新部署）
       me.role==="管理員" && e("div",{
         onClick: maintBusy ? undefined : toggleMaintenance,
