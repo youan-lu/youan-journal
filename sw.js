@@ -1,8 +1,9 @@
-// 佑安服務日誌 Service Worker v41
+// 佑安服務日誌 Service Worker v42
 // 策略：網路優先 + 自動更新，員工免手動清快取
 // 安裝不快取大檔（iOS 相容），第一次成功載入才快取
+// v42（2026/08/06）：把 admin.html 也納入網路優先，修正管理介面永遠拿到舊快取的問題；CACHE_NAME 升版強制清掉舊快取
 
-const CACHE_NAME = 'youan-journal-v41';
+const CACHE_NAME = 'youan-journal-v42';
 const INDEX_URL = '/youan-journal/index.html';
 
 // ── 安裝：不快取，確保 SW 一定安裝成功 ──
@@ -30,7 +31,8 @@ self.addEventListener('fetch', event => {
   const isAppPage =
     event.request.mode === 'navigate' ||
     url.pathname === '/youan-journal/' ||
-    url.pathname === '/youan-journal/index.html';
+    url.pathname === '/youan-journal/index.html' ||
+    url.pathname === '/youan-journal/admin.html';
 
   if (isAppPage) {
     // 網路優先：有網路一定拿最新版，順便更新快取；沒網路才用快取
