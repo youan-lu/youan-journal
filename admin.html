@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 佑安管理介面 admin.html A4.0 -- 漏填顯示天數+筆數  上傳班表(僅管理員)  漏填依照服員分組  漏填加照服員篩選  漏填修復(移除empId誤傳) + 移除異常分頁 + 視角切換 + 更改密碼 漏填三模式(週/月/區間) + 員工增刪改密碼 + 上傳班表自我去重(同年/月/日/員工/時段/個案只留一筆，修正來源檔重複解析導致班表重複) + 維護模式開關(管理員一鍵暫停照服員送出功能) + 8/5修：漏填補填改成只補真正缺的那一碼(帶code參數)，不再整個時段全部BA碼重寫，避免重複寫入已存在的碼 + 8/6 v3.9：日誌編輯區改成跟照服員介面一樣一格一格BA碼(可改班次時間/增減改碼別數量/各碼各自服務內容/皮膚狀況/狀態/備註)，儲存組回新格式一列送後端 adminEditLogFull(需搭配後端 v75) + 8/8 A4.0：日誌查詢改成日期區間(起訖/今日/本週/本月快速鍵)+依日期分組顯示(跟照服員介面同樣呈現方式)；編輯日誌每格BA碼新增「📋資料庫」常用內容展開＋「⭐加入資料庫」按鈕，資料來源呼叫getPhrases(跟照服員介面同一支API)，存範本呼叫savePhrase -->
+<!-- 佑安管理介面 admin.html A4.1 -- 漏填顯示天數+筆數  上傳班表(僅管理員)  漏填依照服員分組  漏填加照服員篩選  漏填修復(移除empId誤傳) + 移除異常分頁 + 視角切換 + 更改密碼 漏填三模式(週/月/區間) + 員工增刪改密碼 + 上傳班表自我去重(同年/月/日/員工/時段/個案只留一筆，修正來源檔重複解析導致班表重複) + 維護模式開關(管理員一鍵暫停照服員送出功能) + 8/5修：漏填補填改成只補真正缺的那一碼(帶code參數)，不再整個時段全部BA碼重寫，避免重複寫入已存在的碼 + 8/6 v3.9：日誌編輯區改成跟照服員介面一樣一格一格BA碼(可改班次時間/增減改碼別數量/各碼各自服務內容/皮膚狀況/狀態/備註)，儲存組回新格式一列送後端 adminEditLogFull(需搭配後端 v75) + 8/8 A4.0：日誌查詢改成日期區間(起訖/今日/本週/本月快速鍵)+依日期分組顯示(跟照服員介面同樣呈現方式)；編輯日誌每格BA碼新增「📋資料庫」常用內容展開＋「⭐加入資料庫」按鈕，資料來源呼叫getPhrases(跟照服員介面同一支API)，存範本呼叫savePhrase + 8/8 A4.1：日誌Tab改成跟照服員介面同款「兩層」導覽——第一層列表只顯示精簡卡片(時間/個案/照服員/狀態/BA碼標籤)，點進去才切換到獨立的第二層詳情/編輯畫面(頂部深綠色列+←返回按鈕，樣式完全比照照服員填寫畫面) -->
 <html lang="zh-Hant">
 <head>
 <meta charset="UTF-8">
@@ -390,7 +390,7 @@ const YouanLogo = ({size=30}) => React.createElement("img",{src:LOGO_SRC,alt:"�
 
 const PillTitle = ({icon,children}) => React.createElement("div",{style:{display:"inline-flex",alignItems:"center",gap:8,background:C.primary,color:"white",borderRadius:22,padding:"7px 18px",fontSize:19,fontWeight:700}},icon&&React.createElement("span",{style:{fontSize:19}},icon),children);
 
-const FooterBar = () => React.createElement("div",{style:{background:C.primary,padding:"16px",display:"flex",alignItems:"center",justifyContent:"center",gap:10,marginTop:10}},React.createElement(YouanLogo,{size:32,color:C.bear}),React.createElement("div",{style:{textAlign:"center"}},React.createElement("div",{style:{color:"white",fontSize:16,fontWeight:700,letterSpacing:1}},"佑安居家長照機構"),React.createElement("div",{style:{color:"rgba(255,255,255,.6)",fontSize:9,letterSpacing:1}},"Youan Long Term Care Institutions　A4.0")));
+const FooterBar = () => React.createElement("div",{style:{background:C.primary,padding:"16px",display:"flex",alignItems:"center",justifyContent:"center",gap:10,marginTop:10}},React.createElement(YouanLogo,{size:32,color:C.bear}),React.createElement("div",{style:{textAlign:"center"}},React.createElement("div",{style:{color:"white",fontSize:16,fontWeight:700,letterSpacing:1}},"佑安居家長照機構"),React.createElement("div",{style:{color:"rgba(255,255,255,.6)",fontSize:9,letterSpacing:1}},"Youan Long Term Care Institutions　A4.1")));
 
 const endHourOf = t => { const m=t.match(/~(\d{2}):(\d{2})/); return m?parseInt(m[1])+parseInt(m[2])/60:24; };
 
@@ -821,7 +821,96 @@ function LogsTab({me, viewSup}){
   }
 
   const isAdmin = me.role==="管理員";
+  const editingLog = editRow!=null ? logs.find(l=>l.row===editRow) : null;
 
+  // ══════════════════════════════════════
+  // 第二層：詳情/編輯畫面（跟照服員介面index.html的填寫畫面同款式）
+  // ══════════════════════════════════════
+  if(editingLog){
+    const log = editingLog;
+    return e("div",{style:{minHeight:"60vh"}},
+      e("div",{style:{background:C.primary,color:"white",padding:"14px 16px",display:"flex",alignItems:"center",gap:14,borderRadius:"12px 12px 0 0"}},
+        e("button",{onClick:()=>setEditRow(null),style:{flexShrink:0,background:"rgba(255,255,255,.12)",border:"1px solid rgba(255,255,255,.3)",color:"white",borderRadius:10,padding:"12px 18px",fontSize:18,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}},"← 返回"),
+        e("div",null,
+          e("div",{style:{display:"flex",alignItems:"baseline",gap:10,marginBottom:2,flexWrap:"wrap"}},
+            e("span",{style:{fontSize:21,fontWeight:700}},log.client),
+            e("span",{style:{fontSize:17,opacity:.85,whiteSpace:"nowrap"}},editData.time)),
+          e("div",{style:{fontSize:17,opacity:.85,whiteSpace:"nowrap"}},dateDisp(log.date)+"　"+log.worker))),
+
+      e("div",{style:{padding:"14px 14px 24px",display:"flex",flexDirection:"column",gap:14,background:C.bg,borderRadius:"0 0 12px 12px"}},
+        // 班次時間
+        e("div",{style:{background:C.card,borderRadius:12,padding:"14px",border:`1px solid ${C.border}`}},
+          e("div",{style:{fontSize:15,color:C.textSub,marginBottom:5}},"班次時間"),
+          e("input",{value:editData.time,onChange:ev=>setEditData({...editData,time:ev.target.value}),placeholder:"如 09:00~11:00",
+            style:{width:"100%",border:`1.5px solid ${C.border}`,borderRadius:9,padding:"11px 12px",fontSize:17,fontFamily:"inherit",boxSizing:"border-box",outline:"none"}})),
+
+        // 身體皮膚狀況
+        e("div",{style:{background:C.card,borderRadius:12,padding:"14px",border:`1px solid ${C.border}`}},
+          e("div",{style:{marginBottom:12}},e(PillTitle,{icon:"🩺"},"身體或皮膚狀況")),
+          e(SkinStatus,{value:editData.skin,onChange:v=>setEditData({...editData,skin:v})}),
+          (editData.skin==="new"||editData.skin==="prev") && e("textarea",{value:editData.skinNote,onChange:ev=>setEditData({...editData,skinNote:ev.target.value}),placeholder:"請說明異常狀況（位置、類型、尺寸）",rows:2,
+            style:{marginTop:8,width:"100%",border:`1px solid ${C.warn}`,borderRadius:7,padding:"8px 10px",fontSize:19,fontFamily:"inherit",resize:"none",boxSizing:"border-box"}})),
+
+        // 服務概況：一格一格BA碼，跟照服員介面同款CodeBlock樣式（含資料庫/加入資料庫）
+        e("div",{style:{display:"flex",flexDirection:"column",gap:10}},
+          e(PillTitle,{icon:"📝"},"服務概況（BA碼）"),
+          (editData.codes||[]).map((c,idx)=>
+            e("div",{key:idx,style:{border:`1.5px solid ${c.summary?C.ok:C.border}`,borderRadius:10,overflow:"hidden",background:c.summary?C.okLight:C.card}},
+              // 標頭：碼別選單 + 數量 + 刪除
+              e("div",{style:{display:"flex",alignItems:"center",gap:8,padding:"8px 10px",background:c.summary?C.okLight:C.divider,borderBottom:`1px solid ${C.border}`,flexWrap:"wrap"}},
+                e("select",{value:c.code,onChange:ev=>setCodeCode(idx,ev.target.value),
+                  style:{border:`1.5px solid ${C.border}`,borderRadius:7,padding:"7px 8px",fontSize:17,fontFamily:"inherit",background:"white",fontWeight:700,color:C.primary}},
+                  ALL_CODES.map(oc=>e("option",{key:oc.code,value:oc.code},oc.code+" "+oc.name))),
+                e("span",{style:{fontSize:16,color:C.textSub}},"×"),
+                e("input",{type:"number",min:1,value:c.qty,onChange:ev=>setCodeQty(idx,ev.target.value),
+                  style:{width:56,border:`1.5px solid ${C.border}`,borderRadius:7,padding:"7px 8px",fontSize:17,fontFamily:"inherit",textAlign:"center",boxSizing:"border-box"}}),
+                e("div",{style:{flex:1}}),
+                e("button",{onClick:()=>removeCode(idx),style:{background:"none",border:"none",color:C.danger,fontSize:16,cursor:"pointer",fontWeight:600}},"移除")),
+              // 內容
+              e("div",{style:{padding:"10px"}},
+                e("textarea",{placeholder:`填寫 ${codeNameOf(c.code)||c.code} 服務內容…`,value:c.summary,onChange:ev=>setCodeSummary(idx,ev.target.value),rows:2,
+                  style:{width:"100%",border:`1px solid ${C.border}`,borderRadius:7,padding:"8px 10px",fontSize:17,resize:"vertical",fontFamily:"inherit",color:C.text,background:"white",boxSizing:"border-box",outline:"none"}})),
+              // 資料庫常用內容／加入資料庫（跟照服員介面同一套chips邏輯）
+              e("div",{style:{padding:"0 10px 10px",display:"flex",flexDirection:"column",gap:8}},
+                e("div",{style:{display:"flex",gap:14,alignItems:"center",flexWrap:"wrap"}},
+                  e("button",{onClick:()=>setShowChipsIdx(p=>({...p,[idx]:!p[idx]})),style:{background:"none",border:"none",color:C.primary,fontSize:16,cursor:"pointer",padding:0,fontWeight:600}},showChipsIdx[idx]?"▲ 收起":"📋 資料庫"),
+                  e("button",{onClick:()=>saveCodeTemplate(idx,log),disabled:!c.summary||savedTemplates[idx],style:{background:"none",border:"none",color:savedTemplates[idx]?C.ok:C.accent,fontSize:16,cursor:(!c.summary||savedTemplates[idx])?"default":"pointer",padding:0,fontWeight:600}},savedTemplates[idx]?"✓ 已加入":"⭐ 加入資料庫")),
+                showChipsIdx[idx] && (()=>{
+                  const chipList = [...chipsFor(log.client,c.code,c.qty,editData.time)].sort((a,b)=>b.freq-a.freq);
+                  const has = t => (c.summary||"").split("、").includes(t);
+                  const addChip = t => { const cur=(c.summary||"").trim(); if(!cur){ setCodeSummary(idx,t); return; } if(cur.split("、").includes(t)) return; setCodeSummary(idx, cur+"、"+t); };
+                  return chipList.length>0
+                    ? e("div",{style:{display:"flex",flexWrap:"wrap",gap:6}},
+                        chipList.map((cp,ci)=>e("button",{key:ci,onClick:()=>addChip(cp.t),disabled:has(cp.t),
+                          style:{background:has(cp.t)?C.okLight:C.primaryLight,border:`1px solid ${has(cp.t)?C.ok:C.border}`,borderRadius:14,padding:"5px 11px",fontSize:15,color:has(cp.t)?C.ok:C.text,cursor:has(cp.t)?"default":"pointer"}},(has(cp.t)?"✓ ":"+ ")+cp.t)))
+                    : e("div",{style:{fontSize:15,color:C.textSub}},"尚無常用資料");
+                })()))),
+          e("button",{onClick:addCode,style:{background:C.accentLight,border:`1.5px dashed ${C.accentBorder}`,borderRadius:9,padding:"10px",fontSize:16,color:C.accent,cursor:"pointer",fontWeight:600,fontFamily:"inherit"}},"＋ 新增 BA 碼")),
+
+        // 狀態／備註
+        e("div",{style:{background:C.card,borderRadius:12,padding:"14px",border:`1px solid ${C.border}`,display:"flex",flexDirection:"column",gap:10}},
+          e("div",null,
+            e("div",{style:{fontSize:15,color:C.textSub,marginBottom:5}},"狀態"),
+            e("select",{value:editData.status,onChange:ev=>setEditData({...editData,status:ev.target.value}),
+              style:{width:"100%",border:`1.5px solid ${C.border}`,borderRadius:9,padding:"11px 12px",fontSize:17,fontFamily:"inherit",background:"white",boxSizing:"border-box"}},
+              e("option",{value:"已送出"},"已送出"),
+              e("option",{value:"異常"},"異常"),
+              e("option",{value:"班表異常"},"班表異常"))),
+          e("div",null,
+            e("div",{style:{fontSize:15,color:C.textSub,marginBottom:5}},"備註"),
+            e("input",{value:editData.note,onChange:ev=>setEditData({...editData,note:ev.target.value}),placeholder:"選填",
+              style:{width:"100%",border:`1.5px solid ${C.border}`,borderRadius:9,padding:"11px 12px",fontSize:17,fontFamily:"inherit",boxSizing:"border-box",outline:"none"}}))),
+
+        editMsg && e("div",{style:{fontSize:16,color:editMsg.startsWith("✓")?C.ok:C.danger}},editMsg),
+        e("div",{style:{display:"flex",gap:10,flexWrap:"wrap"}},
+          e(AdminBtn,{onClick:()=>saveEdit(log),color:"ok",disabled:editBusy,small:true},"💾 儲存"),
+          isAdmin && e(AdminBtn,{onClick:()=>delLog(log),color:"danger",outline:true,disabled:editBusy,small:true},"🗑️ 刪除"),
+          e(AdminBtn,{onClick:()=>setEditRow(null),color:"ghost",outline:true,small:true},"取消"))));
+  }
+
+  // ══════════════════════════════════════
+  // 第一層：列表畫面（精簡卡片，跟照服員介面dayList同款式）
+  // ══════════════════════════════════════
   return e("div",{style:{padding:"14px 14px 90px"}},
     // 篩選卡片
     e("div",{style:{background:C.card,borderRadius:12,padding:14,marginBottom:14,border:`1px solid ${C.border}`}},
@@ -860,92 +949,19 @@ function LogsTab({me, viewSup}){
       e("div",{key:grp.date,style:{marginBottom:18}},
         e("div",{style:{fontSize:19,fontWeight:700,color:C.primary,margin:"10px 4px",borderBottom:`2px solid ${C.primaryLight}`,paddingBottom:4}},
           "📅 "+grp.date+"（"+grp.items.length+" 筆）"),
-    grp.items.map(log=>{
-      const editing = editRow===log.row;
-      const abn = log.status==="異常"||log.status==="班表異常";
-      return e("div",{key:log.row,style:{background:C.card,borderRadius:12,marginBottom:12,padding:"16px 18px",border:`1.5px solid ${abn?C.accent:C.border}`}},
-        e("div",{onClick:()=>openEdit(log),style:{cursor:"pointer"}},
-          e("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8,gap:8}},
-            e("div",{style:{display:"flex",gap:10,flexWrap:"wrap",alignItems:"baseline",justifyContent:"center",flex:1}},
-              e("span",{style:{fontSize:25,fontWeight:700,color:C.text}},log.client),
-              e("span",{style:{fontSize:19,color:C.textSub}},dateDisp(log.date)+" "+log.time),
-              e("span",{style:{fontSize:19,color:C.primary,fontWeight:600}},log.worker)),
-            e(AdminTag,{text:log.status,color:log.status==="已送出"?"ok":(abn?"warn":"danger")})),
-          log.baCode && e("div",{style:{fontSize:18,color:C.textSub,marginBottom:4,textAlign:"center"}},log.baCode),
-          e("div",{style:{fontSize:22,color:C.text,lineHeight:1.5,textAlign:"center"}},log.summary||"（無服務概況）"),
-          log.skinNote && e("div",{style:{fontSize:18,color:C.warn,marginTop:5,textAlign:"center"}},"⚠️ "+log.skinNote)),
-
-        editing && e("div",{style:{marginTop:12,borderTop:`1px solid ${C.border}`,paddingTop:12,display:"flex",flexDirection:"column",gap:10}},
-          // 班次時間
-          e("div",null,
-            e("div",{style:{fontSize:15,color:C.textSub,marginBottom:5}},"班次時間"),
-            e("input",{value:editData.time,onChange:ev=>setEditData({...editData,time:ev.target.value}),placeholder:"如 09:00~11:00",
-              style:{width:"100%",border:`1.5px solid ${C.border}`,borderRadius:9,padding:"11px 12px",fontSize:17,fontFamily:"inherit",boxSizing:"border-box",outline:"none"}})),
-          // 一格一格 BA 碼
-          e("div",null,
-            e("div",{style:{fontSize:15,color:C.textSub,marginBottom:6}},"服務項目（BA碼）與內容"),
-            e("div",{style:{display:"flex",flexDirection:"column",gap:10}},
-              (editData.codes||[]).map((c,idx)=>
-                e("div",{key:idx,style:{border:`1.5px solid ${c.summary?C.ok:C.border}`,borderRadius:10,overflow:"hidden",background:c.summary?C.okLight:C.card}},
-                  // 標頭：碼別選單 + 數量 + 刪除
-                  e("div",{style:{display:"flex",alignItems:"center",gap:8,padding:"8px 10px",background:c.summary?C.okLight:C.divider,borderBottom:`1px solid ${C.border}`,flexWrap:"wrap"}},
-                    e("select",{value:c.code,onChange:ev=>setCodeCode(idx,ev.target.value),
-                      style:{border:`1.5px solid ${C.border}`,borderRadius:7,padding:"7px 8px",fontSize:17,fontFamily:"inherit",background:"white",fontWeight:700,color:C.primary}},
-                      ALL_CODES.map(oc=>e("option",{key:oc.code,value:oc.code},oc.code+" "+oc.name))),
-                    e("span",{style:{fontSize:16,color:C.textSub}},"×"),
-                    e("input",{type:"number",min:1,value:c.qty,onChange:ev=>setCodeQty(idx,ev.target.value),
-                      style:{width:56,border:`1.5px solid ${C.border}`,borderRadius:7,padding:"7px 8px",fontSize:17,fontFamily:"inherit",textAlign:"center",boxSizing:"border-box"}}),
-                    e("div",{style:{flex:1}}),
-                    e("button",{onClick:()=>removeCode(idx),style:{background:"none",border:"none",color:C.danger,fontSize:16,cursor:"pointer",fontWeight:600}},"移除")),
-                  // 內容
-                  e("div",{style:{padding:"10px"}},
-                    e("textarea",{placeholder:`填寫 ${codeNameOf(c.code)||c.code} 服務內容…`,value:c.summary,onChange:ev=>setCodeSummary(idx,ev.target.value),rows:2,
-                      style:{width:"100%",border:`1px solid ${C.border}`,borderRadius:7,padding:"8px 10px",fontSize:17,resize:"vertical",fontFamily:"inherit",color:C.text,background:"white",boxSizing:"border-box",outline:"none"}})),
-                  // 資料庫常用內容／加入資料庫（跟照服員介面同一套chips邏輯）
-                  e("div",{style:{padding:"0 10px 10px",display:"flex",flexDirection:"column",gap:8}},
-                    e("div",{style:{display:"flex",gap:14,alignItems:"center",flexWrap:"wrap"}},
-                      e("button",{onClick:()=>setShowChipsIdx(p=>({...p,[idx]:!p[idx]})),style:{background:"none",border:"none",color:C.primary,fontSize:16,cursor:"pointer",padding:0,fontWeight:600}},showChipsIdx[idx]?"▲ 收起":"📋 資料庫"),
-                      e("button",{onClick:()=>saveCodeTemplate(idx,log),disabled:!c.summary||savedTemplates[idx],style:{background:"none",border:"none",color:savedTemplates[idx]?C.ok:C.accent,fontSize:16,cursor:(!c.summary||savedTemplates[idx])?"default":"pointer",padding:0,fontWeight:600}},savedTemplates[idx]?"✓ 已加入":"⭐ 加入資料庫")),
-                    showChipsIdx[idx] && (()=>{
-                      const chipList = [...chipsFor(log.client,c.code,c.qty,editData.time)].sort((a,b)=>b.freq-a.freq);
-                      const has = t => (c.summary||"").split("、").includes(t);
-                      const addChip = t => { const cur=(c.summary||"").trim(); if(!cur){ setCodeSummary(idx,t); return; } if(cur.split("、").includes(t)) return; setCodeSummary(idx, cur+"、"+t); };
-                      return chipList.length>0
-                        ? e("div",{style:{display:"flex",flexWrap:"wrap",gap:6}},
-                            chipList.map((cp,ci)=>e("button",{key:ci,onClick:()=>addChip(cp.t),disabled:has(cp.t),
-                              style:{background:has(cp.t)?C.okLight:C.primaryLight,border:`1px solid ${has(cp.t)?C.ok:C.border}`,borderRadius:14,padding:"5px 11px",fontSize:15,color:has(cp.t)?C.ok:C.text,cursor:has(cp.t)?"default":"pointer"}},(has(cp.t)?"✓ ":"+ ")+cp.t)))
-                        : e("div",{style:{fontSize:15,color:C.textSub}},"尚無常用資料");
-                    })()))),
-              // 新增 BA 碼
-              e("button",{onClick:addCode,style:{background:C.accentLight,border:`1.5px dashed ${C.accentBorder}`,borderRadius:9,padding:"10px",fontSize:16,color:C.accent,cursor:"pointer",fontWeight:600,fontFamily:"inherit"}},"＋ 新增 BA 碼"))),
-          e("div",null,
-            e("div",{style:{fontSize:15,color:C.textSub,marginBottom:5}},"身體皮膚狀況"),
-            e("select",{value:editData.skin,onChange:ev=>setEditData({...editData,skin:ev.target.value}),
-              style:{width:"100%",border:`1.5px solid ${C.border}`,borderRadius:9,padding:"11px 12px",fontSize:17,fontFamily:"inherit",background:"white",boxSizing:"border-box"}},
-              e("option",{value:"ok"},"服務中無發現異常"),
-              e("option",{value:"prev"},"異常狀況如前次"),
-              e("option",{value:"new"},"有異常"))),
-          (editData.skin==="new"||editData.skin==="prev") && e("div",null,
-            e("div",{style:{fontSize:15,color:C.textSub,marginBottom:5}},"異常說明"),
-            e("input",{value:editData.skinNote,onChange:ev=>setEditData({...editData,skinNote:ev.target.value}),placeholder:"位置、類型、尺寸",
-              style:{width:"100%",border:`1.5px solid ${C.warn}`,borderRadius:9,padding:"11px 12px",fontSize:17,fontFamily:"inherit",boxSizing:"border-box",outline:"none"}})),
-          e("div",null,
-            e("div",{style:{fontSize:15,color:C.textSub,marginBottom:5}},"狀態"),
-            e("select",{value:editData.status,onChange:ev=>setEditData({...editData,status:ev.target.value}),
-              style:{width:"100%",border:`1.5px solid ${C.border}`,borderRadius:9,padding:"11px 12px",fontSize:17,fontFamily:"inherit",background:"white",boxSizing:"border-box"}},
-              e("option",{value:"已送出"},"已送出"),
-              e("option",{value:"異常"},"異常"),
-              e("option",{value:"班表異常"},"班表異常"))),
-          e("div",null,
-            e("div",{style:{fontSize:15,color:C.textSub,marginBottom:5}},"備註"),
-            e("input",{value:editData.note,onChange:ev=>setEditData({...editData,note:ev.target.value}),placeholder:"選填",
-              style:{width:"100%",border:`1.5px solid ${C.border}`,borderRadius:9,padding:"11px 12px",fontSize:17,fontFamily:"inherit",boxSizing:"border-box",outline:"none"}})),
-          editMsg && e("div",{style:{fontSize:16,color:editMsg.startsWith("✓")?C.ok:C.danger}},editMsg),
-          e("div",{style:{display:"flex",gap:10,flexWrap:"wrap"}},
-            e(AdminBtn,{onClick:()=>saveEdit(log),color:"ok",disabled:editBusy,small:true},"💾 儲存"),
-            isAdmin && e(AdminBtn,{onClick:()=>delLog(log),color:"danger",outline:true,disabled:editBusy,small:true},"🗑️ 刪除"),
-            e(AdminBtn,{onClick:()=>setEditRow(null),color:"ghost",outline:true,small:true},"取消"))));
-    }))));
+        grp.items.map(log=>{
+          const abn = log.status==="異常"||log.status==="班表異常";
+          const codes = parseBaField(log.baCode);
+          return e("div",{key:log.row,onClick:()=>openEdit(log),style:{background:C.card,borderRadius:12,border:`1px solid ${abn?C.accent:C.border}`,borderLeft:`5px solid ${abn?C.accent:C.ok}`,overflow:"hidden",boxShadow:"0 1px 3px rgba(47,74,53,.08)",marginBottom:10,cursor:"pointer"}},
+            e("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 14px"}},
+              e("div",null,
+                e("div",{style:{fontSize:18,color:C.textSub,marginBottom:3}},log.time+"　"+log.worker),
+                e("div",{style:{fontSize:21,fontWeight:700,color:C.text}},log.client)),
+              e(AdminTag,{text:log.status,color:log.status==="已送出"?"ok":(abn?"warn":"danger")})),
+            codes.length>0 && e("div",{style:{padding:"8px 14px 10px",borderTop:`1px solid ${C.divider}`,background:"#FAF6EC",display:"flex",flexWrap:"wrap",gap:6}},
+              codes.map((c,i)=>e(Tag,{key:i,code:c.code,name:codeNameOf(c.code),qty:c.qty}))),
+            log.skinNote && e("div",{style:{padding:"0 14px 10px",fontSize:16,color:C.warn}},"⚠️ "+log.skinNote));
+        }))));
 }
 
 // 漏填 Tab
@@ -1536,7 +1552,7 @@ function AdminMain({me, onLogout}){
       // 第一排：Logo + 標題
       e("div",{style:{display:"flex",alignItems:"center",gap:10}},
         e(YouanLogo,{size:34,color:C.bear}),
-        e("div",{style:{fontSize:22,fontWeight:700}},"佑安管理介面　A4.0")),
+        e("div",{style:{fontSize:22,fontWeight:700}},"佑安管理介面　A4.1")),
       // 維護模式狀態列（僅管理員看得到、可操作，點一下即可切換，不用改任何程式碼、不用重新部署）
       me.role==="管理員" && e("div",{
         onClick: maintBusy ? undefined : toggleMaintenance,
