@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 佑安管理介面 admin.html v3.9 -- 漏填顯示天數+筆數  上傳班表(僅管理員)  漏填依照服員分組  漏填加照服員篩選  漏填修復(移除empId誤傳) + 移除異常分頁 + 視角切換 + 更改密碼 漏填三模式(週/月/區間) + 員工增刪改密碼 + 上傳班表自我去重(同年/月/日/員工/時段/個案只留一筆，修正來源檔重複解析導致班表重複) + 維護模式開關(管理員一鍵暫停照服員送出功能) + 8/5修：漏填補填改成只補真正缺的那一碼(帶code參數)，不再整個時段全部BA碼重寫，避免重複寫入已存在的碼 + 8/6 v3.9：日誌編輯區改成跟照服員介面一樣一格一格BA碼(可改班次時間/增減改碼別數量/各碼各自服務內容/皮膚狀況/狀態/備註)，儲存組回新格式一列送後端 adminEditLogFull(需搭配後端 v75) -->
+<!-- 佑安管理介面 admin.html A4.0 -- 漏填顯示天數+筆數  上傳班表(僅管理員)  漏填依照服員分組  漏填加照服員篩選  漏填修復(移除empId誤傳) + 移除異常分頁 + 視角切換 + 更改密碼 漏填三模式(週/月/區間) + 員工增刪改密碼 + 上傳班表自我去重(同年/月/日/員工/時段/個案只留一筆，修正來源檔重複解析導致班表重複) + 維護模式開關(管理員一鍵暫停照服員送出功能) + 8/5修：漏填補填改成只補真正缺的那一碼(帶code參數)，不再整個時段全部BA碼重寫，避免重複寫入已存在的碼 + 8/6 v3.9：日誌編輯區改成跟照服員介面一樣一格一格BA碼(可改班次時間/增減改碼別數量/各碼各自服務內容/皮膚狀況/狀態/備註)，儲存組回新格式一列送後端 adminEditLogFull(需搭配後端 v75) + 8/8 A4.0：日誌查詢改成日期區間(起訖/今日/本週/本月快速鍵)+依日期分組顯示(跟照服員介面同樣呈現方式)；編輯日誌每格BA碼新增「📋資料庫」常用內容展開＋「⭐加入資料庫」按鈕，資料來源呼叫getPhrases(跟照服員介面同一支API)，存範本呼叫savePhrase -->
 <html lang="zh-Hant">
 <head>
 <meta charset="UTF-8">
@@ -390,7 +390,7 @@ const YouanLogo = ({size=30}) => React.createElement("img",{src:LOGO_SRC,alt:"�
 
 const PillTitle = ({icon,children}) => React.createElement("div",{style:{display:"inline-flex",alignItems:"center",gap:8,background:C.primary,color:"white",borderRadius:22,padding:"7px 18px",fontSize:19,fontWeight:700}},icon&&React.createElement("span",{style:{fontSize:19}},icon),children);
 
-const FooterBar = () => React.createElement("div",{style:{background:C.primary,padding:"16px",display:"flex",alignItems:"center",justifyContent:"center",gap:10,marginTop:10}},React.createElement(YouanLogo,{size:32,color:C.bear}),React.createElement("div",{style:{textAlign:"center"}},React.createElement("div",{style:{color:"white",fontSize:16,fontWeight:700,letterSpacing:1}},"佑安居家長照機構"),React.createElement("div",{style:{color:"rgba(255,255,255,.6)",fontSize:9,letterSpacing:1}},"Youan Long Term Care Institutions　v3.9")));
+const FooterBar = () => React.createElement("div",{style:{background:C.primary,padding:"16px",display:"flex",alignItems:"center",justifyContent:"center",gap:10,marginTop:10}},React.createElement(YouanLogo,{size:32,color:C.bear}),React.createElement("div",{style:{textAlign:"center"}},React.createElement("div",{style:{color:"white",fontSize:16,fontWeight:700,letterSpacing:1}},"佑安居家長照機構"),React.createElement("div",{style:{color:"rgba(255,255,255,.6)",fontSize:9,letterSpacing:1}},"Youan Long Term Care Institutions　A4.0")));
 
 const endHourOf = t => { const m=t.match(/~(\d{2}):(\d{2})/); return m?parseInt(m[1])+parseInt(m[2])/60:24; };
 
@@ -589,7 +589,8 @@ function LogsTab({me, viewSup}){
   const [logs,setLogs] = useState([]);
   const [loading,setLoading] = useState(false);
   const [loaded,setLoaded] = useState(false);
-  const [fDate,setFDate] = useState("");
+  const [fDateFrom,setFDateFrom] = useState("");
+  const [fDateTo,setFDateTo] = useState("");
   const [fWorker,setFWorker] = useState("");
   const [fClient,setFClient] = useState("");
   const [editRow,setEditRow] = useState(null);
@@ -597,7 +598,24 @@ function LogsTab({me, viewSup}){
   const [editBusy,setEditBusy] = useState(false);
   const [editMsg,setEditMsg] = useState("");
   const [staffOpts,setStaffOpts] = useState([]);   // 在職員工（下拉用）
+  const [staffFull,setStaffFull] = useState([]);   // 在職員工完整資料 [{empId,name}]（查常用內容要用empId）
   const [caseOpts,setCaseOpts] = useState([]);     // 服務中個案（下拉用）
+  // ★資料庫範本／帶入上次：跟照服員介面index.html同一套資料來源(getPhrases)
+  const [phrases,setPhrases] = useState({});
+  const [phrasesQty,setPhrasesQty] = useState({});
+  const [phrasesSlot,setPhrasesSlot] = useState({});
+  const [byCode,setByCode] = useState({});
+  const [savedTemplates,setSavedTemplates] = useState({});  // idx -> true（本次編輯session存過範本）
+  const [showChipsIdx,setShowChipsIdx] = useState({});      // idx -> true（展開中）
+  const [editEmpId,setEditEmpId] = useState("");             // 目前編輯這筆日誌的照服員empId
+
+  // 時段區間：早上/中午/下午/晚上（跟index.html slotOf邏輯一致，用來比對常用內容）
+  const slotOf = t => {
+    const m=String(t||"").replace(/[～〜]/g,"~").match(/(\d{1,2}):/);
+    if(!m)return "";
+    const h=parseInt(m[1],10);
+    return h<11?"AM":h<13?"NOON":h<18?"PM":"NIGHT";
+  };
 
   // 載入下拉選單來源：在職員工 + 服務中個案
   async function loadOpts(){
@@ -606,6 +624,7 @@ function LogsTab({me, viewSup}){
       if(rs.ok){
         const list = (rs.staff||[]).filter(s=>String(s.status||"").trim()==="在職");
         setStaffOpts(list.map(s=>s.name).filter(Boolean));
+        setStaffFull(list.map(s=>({empId:s.empId,name:s.name})));
       }
     }catch(ex){}
     try{
@@ -617,21 +636,83 @@ function LogsTab({me, viewSup}){
     }catch(ex){}
   }
 
+  // 依姓名找該照服員empId（編輯日誌時要用來查常用內容）
+  function empIdOfWorker(name){
+    const f = staffFull.find(s=>s.name===name);
+    return f ? f.empId : "";
+  }
+
   async function load(){
     setLoading(true);
     try{
-      // 日期選擇器值為 YYYY-MM-DD，轉成後端比對用的 M/D
-      let dmd = "";
-      if(fDate){ const p=fDate.split("-"); if(p.length===3) dmd = parseInt(p[1])+"/"+parseInt(p[2]); }
+      // ★不再用單一天篩選，一律抓該照服員/個案的全部資料，日期範圍改成前端過濾
+      //   （原本fDate留白時後端本來就是回全部，這裡沿用同樣的行為，不用改後端）
       const r = await adminAPI("adminGetLogs",{role:me.role,empId:me.empId,
-        date:dmd, worker:fWorker, client:fClient,
-        filterDate:dmd, filterWorker:fWorker, filterClient:fClient,
+        date:"", worker:fWorker, client:fClient,
+        filterDate:"", filterWorker:fWorker, filterClient:fClient,
         viewSup:viewSup||"",
         supervisor:me.role==="督導"?me.name:"",
         filterSupervisor:me.role==="督導"?me.name:""});
       setLogs(r.ok?(r.logs||[]):[]); setLoaded(true);
     }catch(ex){}
     setLoading(false);
+  }
+
+  // 日期區間比對用：把 log.date（各種格式）轉成 M/D 數字方便比大小
+  function mdNum(dstr){
+    const s = dateDisp(dstr);           // 統一轉成 "M/D"
+    const p = s.split("/");
+    if(p.length!==2) return -1;
+    return parseInt(p[0])*100 + parseInt(p[1]);
+  }
+  function isoToMd(iso){
+    if(!iso) return -1;
+    const p = iso.split("-");           // YYYY-MM-DD
+    if(p.length!==3) return -1;
+    return parseInt(p[1])*100 + parseInt(p[2]);
+  }
+
+  // 套用日期區間 + 分組（一天一組，跟照服員登入介面同樣的呈現方式）
+  const filteredLogs = (() => {
+    if(!fDateFrom && !fDateTo) return logs;
+    const fromN = fDateFrom ? isoToMd(fDateFrom) : -1;
+    const toN   = fDateTo   ? isoToMd(fDateTo)   : 99991231;
+    return logs.filter(l=>{
+      const n = mdNum(l.date);
+      if(n<0) return true;   // 日期格式怪異就不擋掉，讓管理員自己看得到
+      return n>=(fromN<0?0:fromN) && n<=toN;
+    });
+  })();
+  const groupedByDate = (() => {
+    const g = {};
+    filteredLogs.forEach(l=>{
+      const k = dateDisp(l.date) || "（無日期）";
+      if(!g[k]) g[k]=[];
+      g[k].push(l);
+    });
+    // 日期新到舊排序
+    return Object.keys(g).sort((a,b)=>{
+      const na=a.split("/").map(Number), nb=b.split("/").map(Number);
+      if(na.length!==2||nb.length!==2) return 0;
+      return (nb[0]*100+nb[1])-(na[0]*100+na[1]);
+    }).map(k=>({date:k, items:g[k]}));
+  })();
+
+  // 快速區間按鈕：今日／本週／本月／清除
+  function setQuickRange(kind){
+    const now = new Date();
+    const toISO = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+    if(kind==="today"){ setFDateFrom(toISO(now)); setFDateTo(toISO(now)); }
+    else if(kind==="week"){
+      const day = now.getDay()||7;
+      const mon = new Date(now); mon.setDate(now.getDate()-day+1);
+      const sun = new Date(mon); sun.setDate(mon.getDate()+6);
+      setFDateFrom(toISO(mon)); setFDateTo(toISO(sun));
+    } else if(kind==="month"){
+      const first = new Date(now.getFullYear(), now.getMonth(), 1);
+      const last  = new Date(now.getFullYear(), now.getMonth()+1, 0);
+      setFDateFrom(toISO(first)); setFDateTo(toISO(last));
+    } else { setFDateFrom(""); setFDateTo(""); }
   }
 
   React.useEffect(()=>{ load(); loadOpts(); }, []);
@@ -648,6 +729,47 @@ function LogsTab({me, viewSup}){
       status: log.status||"已送出"
     });
     setEditMsg("");
+    setSavedTemplates({});
+    setShowChipsIdx({});
+    // ★查該照服員的常用內容資料庫，跟照服員自己填報時用的是同一支API
+    const empId = empIdOfWorker(log.worker);
+    setEditEmpId(empId);
+    if(empId){
+      callAPI("getPhrases",{empId}).then(phR=>{
+        setPhrases(phR.ok?phR.phrases||{}:{});
+        setPhrasesQty(phR.ok?phR.phrasesQty||{}:{});
+        setPhrasesSlot(phR.ok?phR.phrasesSlot||{}:{});
+        setByCode(phR.ok?phR.byCode||{}:{});
+      }).catch(()=>{});
+    } else {
+      setPhrases({}); setPhrasesQty({}); setPhrasesSlot({}); setByCode({});
+    }
+  }
+
+  // 算某一格（依目前的個案+碼+量+時段）可以帶出的常用內容清單，跟index.html chips邏輯一致
+  function chipsFor(client, code, qty, time){
+    const k=`${client}_${code}`;
+    const qk=`${k}_${qty||1}`;
+    const sameSlot=phrasesSlot[`${qk}_${slotOf(time)}`]||[];
+    const sameQty=phrasesQty[qk]||[];
+    const exact=phrases[k]||[];
+    const all=byCode[code]||[];
+    const seen=new Set();
+    const out=[];
+    sameSlot.forEach(p=>{if(!seen.has(p.text)){seen.add(p.text);out.push({t:p.text,freq:p.count,personal:true});}});
+    sameQty.forEach(p=>{if(!seen.has(p.text)){seen.add(p.text);out.push({t:p.text,freq:p.count,personal:true});}});
+    exact.forEach(p=>{if(!seen.has(p.text)){seen.add(p.text);out.push({t:p.text,freq:p.count,personal:true});}});
+    all.forEach(p=>{if(!seen.has(p.text)){seen.add(p.text);out.push({t:p.text,freq:p.count,personal:false});}});
+    return out;
+  }
+
+  // 把某一格內容存進常用資料庫（掛在該照服員名下，方便他自己下次也能帶出來）
+  function saveCodeTemplate(idx, log){
+    const c = editData.codes[idx];
+    if(!c || !c.summary) return;
+    const empId = editEmpId, empName = log.worker;
+    fetch(API,{method:"POST",body:JSON.stringify({action:"savePhrase",empId,empName,client:log.client,code:c.code,phrase:c.summary})}).catch(()=>{});
+    setSavedTemplates(p=>({...p,[idx]:true}));
   }
 
   // 編輯中：改某一格內容
@@ -703,11 +825,19 @@ function LogsTab({me, viewSup}){
   return e("div",{style:{padding:"14px 14px 90px"}},
     // 篩選卡片
     e("div",{style:{background:C.card,borderRadius:12,padding:14,marginBottom:14,border:`1px solid ${C.border}`}},
+      e("div",{style:{fontSize:18,color:C.textSub,marginBottom:6,textAlign:"center"}},"日期區間（留白＝不限日期）"),
+      e("div",{style:{display:"flex",gap:8,alignItems:"center",marginBottom:8}},
+        e("input",{type:"date",value:fDateFrom,onChange:ev=>setFDateFrom(ev.target.value),
+          style:{flex:1,border:`1.5px solid ${C.border}`,borderRadius:9,padding:"12px 10px",fontSize:19,fontFamily:"inherit",boxSizing:"border-box",outline:"none",background:"white",textAlign:"center"}}),
+        e("span",{style:{color:C.textSub}},"～"),
+        e("input",{type:"date",value:fDateTo,onChange:ev=>setFDateTo(ev.target.value),
+          style:{flex:1,border:`1.5px solid ${C.border}`,borderRadius:9,padding:"12px 10px",fontSize:19,fontFamily:"inherit",boxSizing:"border-box",outline:"none",background:"white",textAlign:"center"}})),
+      e("div",{style:{display:"flex",gap:8,flexWrap:"wrap",marginBottom:12}},
+        e(AdminBtn,{onClick:()=>setQuickRange("today"),outline:true,small:true},"今日"),
+        e(AdminBtn,{onClick:()=>setQuickRange("week"),outline:true,small:true},"本週"),
+        e(AdminBtn,{onClick:()=>setQuickRange("month"),outline:true,small:true},"本月"),
+        e(AdminBtn,{onClick:()=>setQuickRange("clear"),outline:true,small:true,color:"ghost"},"清除區間")),
       e("div",{style:{display:"flex",flexWrap:"wrap",gap:12}},
-        e("div",{style:{flex:"1 1 100px"}},
-          e("div",{style:{fontSize:18,color:C.textSub,marginBottom:6,textAlign:"center"}},"日期"),
-          e("input",{type:"date",value:fDate,onChange:ev=>setFDate(ev.target.value),
-            style:{width:"100%",border:`1.5px solid ${C.border}`,borderRadius:9,padding:"14px 12px",fontSize:22,fontFamily:"inherit",boxSizing:"border-box",outline:"none",background:"white",textAlign:"center"}})),
         e("div",{style:{flex:"1 1 100px"}},
           e("div",{style:{fontSize:18,color:C.textSub,marginBottom:6,textAlign:"center"}},"照服員"),
           e("select",{value:fWorker,onChange:ev=>setFWorker(ev.target.value),
@@ -724,9 +854,13 @@ function LogsTab({me, viewSup}){
         e("button",{onClick:load,disabled:loading,style:{width:"100%",background:loading?C.ok:C.primary,color:"white",border:"none",borderRadius:10,padding:"12px",fontSize:18,fontWeight:700,cursor:loading?"default":"pointer",fontFamily:"inherit"}},loading?"查詢中…":"🔍 查詢"))),
 
     loading && e("div",{style:{textAlign:"center",padding:50,color:C.textSub,fontSize:17}},"載入中…"),
-    !loading && loaded && logs.length===0 && e("div",{style:{textAlign:"center",padding:50,color:C.textSub,fontSize:17}},"查無資料"),
+    !loading && loaded && filteredLogs.length===0 && e("div",{style:{textAlign:"center",padding:50,color:C.textSub,fontSize:17}},"查無資料"),
 
-    logs.map(log=>{
+    groupedByDate.map(grp =>
+      e("div",{key:grp.date,style:{marginBottom:18}},
+        e("div",{style:{fontSize:19,fontWeight:700,color:C.primary,margin:"10px 4px",borderBottom:`2px solid ${C.primaryLight}`,paddingBottom:4}},
+          "📅 "+grp.date+"（"+grp.items.length+" 筆）"),
+    grp.items.map(log=>{
       const editing = editRow===log.row;
       const abn = log.status==="異常"||log.status==="班表異常";
       return e("div",{key:log.row,style:{background:C.card,borderRadius:12,marginBottom:12,padding:"16px 18px",border:`1.5px solid ${abn?C.accent:C.border}`}},
@@ -766,7 +900,22 @@ function LogsTab({me, viewSup}){
                   // 內容
                   e("div",{style:{padding:"10px"}},
                     e("textarea",{placeholder:`填寫 ${codeNameOf(c.code)||c.code} 服務內容…`,value:c.summary,onChange:ev=>setCodeSummary(idx,ev.target.value),rows:2,
-                      style:{width:"100%",border:`1px solid ${C.border}`,borderRadius:7,padding:"8px 10px",fontSize:17,resize:"vertical",fontFamily:"inherit",color:C.text,background:"white",boxSizing:"border-box",outline:"none"}})))),
+                      style:{width:"100%",border:`1px solid ${C.border}`,borderRadius:7,padding:"8px 10px",fontSize:17,resize:"vertical",fontFamily:"inherit",color:C.text,background:"white",boxSizing:"border-box",outline:"none"}})),
+                  // 資料庫常用內容／加入資料庫（跟照服員介面同一套chips邏輯）
+                  e("div",{style:{padding:"0 10px 10px",display:"flex",flexDirection:"column",gap:8}},
+                    e("div",{style:{display:"flex",gap:14,alignItems:"center",flexWrap:"wrap"}},
+                      e("button",{onClick:()=>setShowChipsIdx(p=>({...p,[idx]:!p[idx]})),style:{background:"none",border:"none",color:C.primary,fontSize:16,cursor:"pointer",padding:0,fontWeight:600}},showChipsIdx[idx]?"▲ 收起":"📋 資料庫"),
+                      e("button",{onClick:()=>saveCodeTemplate(idx,log),disabled:!c.summary||savedTemplates[idx],style:{background:"none",border:"none",color:savedTemplates[idx]?C.ok:C.accent,fontSize:16,cursor:(!c.summary||savedTemplates[idx])?"default":"pointer",padding:0,fontWeight:600}},savedTemplates[idx]?"✓ 已加入":"⭐ 加入資料庫")),
+                    showChipsIdx[idx] && (()=>{
+                      const chipList = [...chipsFor(log.client,c.code,c.qty,editData.time)].sort((a,b)=>b.freq-a.freq);
+                      const has = t => (c.summary||"").split("、").includes(t);
+                      const addChip = t => { const cur=(c.summary||"").trim(); if(!cur){ setCodeSummary(idx,t); return; } if(cur.split("、").includes(t)) return; setCodeSummary(idx, cur+"、"+t); };
+                      return chipList.length>0
+                        ? e("div",{style:{display:"flex",flexWrap:"wrap",gap:6}},
+                            chipList.map((cp,ci)=>e("button",{key:ci,onClick:()=>addChip(cp.t),disabled:has(cp.t),
+                              style:{background:has(cp.t)?C.okLight:C.primaryLight,border:`1px solid ${has(cp.t)?C.ok:C.border}`,borderRadius:14,padding:"5px 11px",fontSize:15,color:has(cp.t)?C.ok:C.text,cursor:has(cp.t)?"default":"pointer"}},(has(cp.t)?"✓ ":"+ ")+cp.t)))
+                        : e("div",{style:{fontSize:15,color:C.textSub}},"尚無常用資料");
+                    })()))),
               // 新增 BA 碼
               e("button",{onClick:addCode,style:{background:C.accentLight,border:`1.5px dashed ${C.accentBorder}`,borderRadius:9,padding:"10px",fontSize:16,color:C.accent,cursor:"pointer",fontWeight:600,fontFamily:"inherit"}},"＋ 新增 BA 碼"))),
           e("div",null,
@@ -796,7 +945,7 @@ function LogsTab({me, viewSup}){
             e(AdminBtn,{onClick:()=>saveEdit(log),color:"ok",disabled:editBusy,small:true},"💾 儲存"),
             isAdmin && e(AdminBtn,{onClick:()=>delLog(log),color:"danger",outline:true,disabled:editBusy,small:true},"🗑️ 刪除"),
             e(AdminBtn,{onClick:()=>setEditRow(null),color:"ghost",outline:true,small:true},"取消"))));
-    }));
+    }))));
 }
 
 // 漏填 Tab
@@ -1387,7 +1536,7 @@ function AdminMain({me, onLogout}){
       // 第一排：Logo + 標題
       e("div",{style:{display:"flex",alignItems:"center",gap:10}},
         e(YouanLogo,{size:34,color:C.bear}),
-        e("div",{style:{fontSize:22,fontWeight:700}},"佑安管理介面　v3.9")),
+        e("div",{style:{fontSize:22,fontWeight:700}},"佑安管理介面　A4.0")),
       // 維護模式狀態列（僅管理員看得到、可操作，點一下即可切換，不用改任何程式碼、不用重新部署）
       me.role==="管理員" && e("div",{
         onClick: maintBusy ? undefined : toggleMaintenance,
