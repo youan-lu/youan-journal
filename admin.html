@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 佑安管理介面 admin.html A5.0 -- 漏填顯示天數+筆數  上傳班表(僅管理員)  漏填依照服員分組  漏填加照服員篩選  漏填修復(移除empId誤傳) + 移除異常分頁 + 視角切換 + 更改密碼 漏填三模式(週/月/區間) + 員工增刪改密碼 + 上傳班表自我去重(同年/月/日/員工/時段/個案只留一筆，修正來源檔重複解析導致班表重複) + 維護模式開關(管理員一鍵暫停照服員送出功能) + 8/5修：漏填補填改成只補真正缺的那一碼(帶code參數)，不再整個時段全部BA碼重寫，避免重複寫入已存在的碼 + 8/6 v3.9：日誌編輯區改成跟照服員介面一樣一格一格BA碼(可改班次時間/增減改碼別數量/各碼各自服務內容/皮膚狀況/狀態/備註)，儲存組回新格式一列送後端 adminEditLogFull(需搭配後端 v75) + 8/8 A4.0：日誌查詢改成日期區間(起訖/今日/本週/本月快速鍵)+依日期分組顯示(跟照服員介面同樣呈現方式)；編輯日誌每格BA碼新增「📋資料庫」常用內容展開＋「⭐加入資料庫」按鈕，資料來源呼叫getPhrases(跟照服員介面同一支API)，存範本呼叫savePhrase + 8/8 A4.1：日誌Tab改成跟照服員介面同款「兩層」導覽——第一層列表只顯示精簡卡片(時間/個案/照服員/狀態/BA碼標籤)，點進去才切換到獨立的第二層詳情/編輯畫面(頂部深綠色列+←返回按鈕，樣式完全比照照服員填寫畫面) + 8/8 A4.2：查詢結果橫跨多天時，插入一層「日期選單」（先列出每天各幾筆，點某一天才往下看那天的日誌列表），單一天查詢則直接跳過這層，行為不變 + 8/12 A5.0：日誌Tab整個改成班表式——最上面必選照服員(沒選整頁空白)，選定後畫面完全比照照服員app：月/日選擇器+當月未填banner(呼叫adminGetMissing)+單日班次列表(呼叫getDay，同時顯示已送出跟未填、依排定時間排序)。已送出點進去用adminEditLogFull改；未填點進去用新的adminCreateLog新增(前端組好合併字串一次送出，不再用adminFillMissing那套有bug的伺服器合併判斷)。列表最下面加「＋新增班次」按鈕，應付班表沒排的臨時補登，一樣呼叫adminCreateLog。需搭配後端V80(新增adminCreateLog+修復doPost白名單漏掉adminEditLogFull的bug)。 -->
+<!-- 佑安管理介面 admin.html A5.1 -- 漏填顯示天數+筆數  上傳班表(僅管理員)  漏填依照服員分組  漏填加照服員篩選  漏填修復(移除empId誤傳) + 移除異常分頁 + 視角切換 + 更改密碼 漏填三模式(週/月/區間) + 員工增刪改密碼 + 上傳班表自我去重(同年/月/日/員工/時段/個案只留一筆，修正來源檔重複解析導致班表重複) + 維護模式開關(管理員一鍵暫停照服員送出功能) + 8/5修：漏填補填改成只補真正缺的那一碼(帶code參數)，不再整個時段全部BA碼重寫，避免重複寫入已存在的碼 + 8/6 v3.9：日誌編輯區改成跟照服員介面一樣一格一格BA碼(可改班次時間/增減改碼別數量/各碼各自服務內容/皮膚狀況/狀態/備註)，儲存組回新格式一列送後端 adminEditLogFull(需搭配後端 v75) + 8/8 A4.0：日誌查詢改成日期區間(起訖/今日/本週/本月快速鍵)+依日期分組顯示(跟照服員介面同樣呈現方式)；編輯日誌每格BA碼新增「📋資料庫」常用內容展開＋「⭐加入資料庫」按鈕，資料來源呼叫getPhrases(跟照服員介面同一支API)，存範本呼叫savePhrase + 8/8 A4.1：日誌Tab改成跟照服員介面同款「兩層」導覽——第一層列表只顯示精簡卡片(時間/個案/照服員/狀態/BA碼標籤)，點進去才切換到獨立的第二層詳情/編輯畫面(頂部深綠色列+←返回按鈕，樣式完全比照照服員填寫畫面) + 8/8 A4.2：查詢結果橫跨多天時，插入一層「日期選單」（先列出每天各幾筆，點某一天才往下看那天的日誌列表），單一天查詢則直接跳過這層，行為不變 + 8/12 A5.0：日誌Tab整個改成班表式——最上面必選照服員(沒選整頁空白)，選定後畫面完全比照照服員app：月/日選擇器+當月未填banner(呼叫adminGetMissing)+單日班次列表(呼叫getDay，同時顯示已送出跟未填、依排定時間排序)。已送出點進去用adminEditLogFull改；未填點進去用新的adminCreateLog新增(前端組好合併字串一次送出，不再用adminFillMissing那套有bug的伺服器合併判斷)。列表最下面加「＋新增班次」按鈕，應付班表沒排的臨時補登，一樣呼叫adminCreateLog。需搭配後端V80(新增adminCreateLog+修復doPost白名單漏掉adminEditLogFull的bug)。 + 8/12 A5.1：分頁名稱「日誌」改成「班表調整」；「＋新增班次」存檔時同步補一列進「員工班表」(帶syncSchedule=1，未填補登不會帶，因為班表本來就有那筆)；修改既有班次時間時，也同步找員工班表對應列一併更新時段(需搭配後端V81)。 -->
 <html lang="zh-Hant">
 <head>
 <meta charset="UTF-8">
@@ -390,7 +390,7 @@ const YouanLogo = ({size=30}) => React.createElement("img",{src:LOGO_SRC,alt:"�
 
 const PillTitle = ({icon,children}) => React.createElement("div",{style:{display:"inline-flex",alignItems:"center",gap:8,background:C.primary,color:"white",borderRadius:22,padding:"7px 18px",fontSize:19,fontWeight:700}},icon&&React.createElement("span",{style:{fontSize:19}},icon),children);
 
-const FooterBar = () => React.createElement("div",{style:{background:C.primary,padding:"16px",display:"flex",alignItems:"center",justifyContent:"center",gap:10,marginTop:10}},React.createElement(YouanLogo,{size:32,color:C.bear}),React.createElement("div",{style:{textAlign:"center"}},React.createElement("div",{style:{color:"white",fontSize:16,fontWeight:700,letterSpacing:1}},"佑安居家長照機構"),React.createElement("div",{style:{color:"rgba(255,255,255,.6)",fontSize:9,letterSpacing:1}},"Youan Long Term Care Institutions　A5.0")));
+const FooterBar = () => React.createElement("div",{style:{background:C.primary,padding:"16px",display:"flex",alignItems:"center",justifyContent:"center",gap:10,marginTop:10}},React.createElement(YouanLogo,{size:32,color:C.bear}),React.createElement("div",{style:{textAlign:"center"}},React.createElement("div",{style:{color:"white",fontSize:16,fontWeight:700,letterSpacing:1}},"佑安居家長照機構"),React.createElement("div",{style:{color:"rgba(255,255,255,.6)",fontSize:9,letterSpacing:1}},"Youan Long Term Care Institutions　A5.1")));
 
 const endHourOf = t => { const m=t.match(/~(\d{2}):(\d{2})/); return m?parseInt(m[1])+parseInt(m[2])/60:24; };
 
@@ -757,7 +757,7 @@ function LogsTab({me, viewSup}){
   }
 
   function openCreateFromSession(sess){
-    setEditing({mode:"create", client:sess.client, date:pickMonth+"/"+pickDay});
+    setEditing({mode:"create", client:sess.client, date:pickMonth+"/"+pickDay, sync:false});
     const codes = (sess.codes||[]).map(function(c){return {code:c.code, qty:c.qty, summary:""};});
     setEditData({
       time: sess.time, client: sess.client, banType: sess.bantype||"",
@@ -769,7 +769,7 @@ function LogsTab({me, viewSup}){
 
   function openCreateBlank(){
     if(!targetName){ return; }
-    setEditing({mode:"create", client:"", date:pickMonth+"/"+pickDay});
+    setEditing({mode:"create", client:"", date:pickMonth+"/"+pickDay, sync:true});
     setEditData({
       time:"", client:"", banType:"",
       codes:[{code:ALL_CODES[0].code, qty:1, summary:""}],
@@ -841,7 +841,8 @@ function LogsTab({me, viewSup}){
           date: rocYear+"/"+pickMonth+"/"+pickDay,
           client:editData.client, time:editData.time, banType:editData.banType||"",
           baCode:hCol, summary:iCol, skin:editData.skin, skinNote:editData.skinNote,
-          status:editData.status||"系統補登", note:editData.note||""
+          status:editData.status||"系統補登", note:editData.note||"",
+          syncSchedule: editing.sync ? "1" : ""
         });
         if(r.ok){
           setEditMsg("✓ 已新增");
@@ -1502,8 +1503,8 @@ function UploadTab({me}){
 function AdminMain({me, onLogout}){
   const [tab,setTab] = useState("logs");
   const tabs = me.role==="管理員"
-    ? [["logs","📋 日誌"],["missing","📝 漏填"],["staff","👥 名單"],["upload","📤 班表"]]
-    : [["logs","📋 日誌"],["missing","📝 漏填"],["staff","👥 名單"]];
+    ? [["logs","📋 班表調整"],["missing","📝 漏填"],["staff","👥 名單"],["upload","📤 班表"]]
+    : [["logs","📋 班表調整"],["missing","📝 漏填"],["staff","👥 名單"]];
   // 更改密碼彈窗
   const [showPw,setShowPw] = useState(false);
   const [oldPw,setOldPw] = useState("");
@@ -1595,7 +1596,7 @@ function AdminMain({me, onLogout}){
       // 第一排：Logo + 標題
       e("div",{style:{display:"flex",alignItems:"center",gap:10}},
         e(YouanLogo,{size:34,color:C.bear}),
-        e("div",{style:{fontSize:22,fontWeight:700}},"佑安管理介面　A5.0")),
+        e("div",{style:{fontSize:22,fontWeight:700}},"佑安管理介面　A5.1")),
       // 維護模式狀態列（僅管理員看得到、可操作，點一下即可切換，不用改任何程式碼、不用重新部署）
       me.role==="管理員" && e("div",{
         onClick: maintBusy ? undefined : toggleMaintenance,
