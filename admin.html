@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 佑安管理介面 admin.html A5.2 -- 漏填顯示天數+筆數  上傳班表(僅管理員)  漏填依照服員分組  漏填加照服員篩選  漏填修復(移除empId誤傳) + 移除異常分頁 + 視角切換 + 更改密碼 漏填三模式(週/月/區間) + 員工增刪改密碼 + 上傳班表自我去重(同年/月/日/員工/時段/個案只留一筆，修正來源檔重複解析導致班表重複) + 維護模式開關(管理員一鍵暫停照服員送出功能) + 8/5修：漏填補填改成只補真正缺的那一碼(帶code參數)，不再整個時段全部BA碼重寫，避免重複寫入已存在的碼 + 8/6 v3.9：日誌編輯區改成跟照服員介面一樣一格一格BA碼(可改班次時間/增減改碼別數量/各碼各自服務內容/皮膚狀況/狀態/備註)，儲存組回新格式一列送後端 adminEditLogFull(需搭配後端 v75) + 8/8 A4.0：日誌查詢改成日期區間(起訖/今日/本週/本月快速鍵)+依日期分組顯示(跟照服員介面同樣呈現方式)；編輯日誌每格BA碼新增「📋資料庫」常用內容展開＋「⭐加入資料庫」按鈕，資料來源呼叫getPhrases(跟照服員介面同一支API)，存範本呼叫savePhrase + 8/8 A4.1：日誌Tab改成跟照服員介面同款「兩層」導覽——第一層列表只顯示精簡卡片(時間/個案/照服員/狀態/BA碼標籤)，點進去才切換到獨立的第二層詳情/編輯畫面(頂部深綠色列+←返回按鈕，樣式完全比照照服員填寫畫面) + 8/8 A4.2：查詢結果橫跨多天時，插入一層「日期選單」（先列出每天各幾筆，點某一天才往下看那天的日誌列表），單一天查詢則直接跳過這層，行為不變 + 8/12 A5.0：日誌Tab整個改成班表式——最上面必選照服員(沒選整頁空白)，選定後畫面完全比照照服員app：月/日選擇器+當月未填banner(呼叫adminGetMissing)+單日班次列表(呼叫getDay，同時顯示已送出跟未填、依排定時間排序)。已送出點進去用adminEditLogFull改；未填點進去用新的adminCreateLog新增(前端組好合併字串一次送出，不再用adminFillMissing那套有bug的伺服器合併判斷)。列表最下面加「＋新增班次」按鈕，應付班表沒排的臨時補登，一樣呼叫adminCreateLog。需搭配後端V80(新增adminCreateLog+修復doPost白名單漏掉adminEditLogFull的bug)。 + 8/12 A5.1：分頁名稱「日誌」改成「班表調整」；「＋新增班次」存檔時同步補一列進「員工班表」(帶syncSchedule=1，未填補登不會帶，因為班表本來就有那筆)；修改既有班次時間時，也同步找員工班表對應列一併更新時段(需搭配後端V81)。 + 8/12 A5.2：選照服員/切換日期時，原本同時發出好幾個重的請求(getDay+getPhrases+adminGetMissing+adminGetLogs)，會佔用Apps Script執行資源、導致同時間照服員自己那邊的請求逾時失敗；改成依序排隊呼叫，降低瞬間負擔。 -->
+<!-- 佑安管理介面 admin.html A5.3 -- 漏填顯示天數+筆數  上傳班表(僅管理員)  漏填依照服員分組  漏填加照服員篩選  漏填修復(移除empId誤傳) + 移除異常分頁 + 視角切換 + 更改密碼 漏填三模式(週/月/區間) + 員工增刪改密碼 + 上傳班表自我去重(同年/月/日/員工/時段/個案只留一筆，修正來源檔重複解析導致班表重複) + 維護模式開關(管理員一鍵暫停照服員送出功能) + 8/5修：漏填補填改成只補真正缺的那一碼(帶code參數)，不再整個時段全部BA碼重寫，避免重複寫入已存在的碼 + 8/6 v3.9：日誌編輯區改成跟照服員介面一樣一格一格BA碼(可改班次時間/增減改碼別數量/各碼各自服務內容/皮膚狀況/狀態/備註)，儲存組回新格式一列送後端 adminEditLogFull(需搭配後端 v75) + 8/8 A4.0：日誌查詢改成日期區間(起訖/今日/本週/本月快速鍵)+依日期分組顯示(跟照服員介面同樣呈現方式)；編輯日誌每格BA碼新增「📋資料庫」常用內容展開＋「⭐加入資料庫」按鈕，資料來源呼叫getPhrases(跟照服員介面同一支API)，存範本呼叫savePhrase + 8/8 A4.1：日誌Tab改成跟照服員介面同款「兩層」導覽——第一層列表只顯示精簡卡片(時間/個案/照服員/狀態/BA碼標籤)，點進去才切換到獨立的第二層詳情/編輯畫面(頂部深綠色列+←返回按鈕，樣式完全比照照服員填寫畫面) + 8/8 A4.2：查詢結果橫跨多天時，插入一層「日期選單」（先列出每天各幾筆，點某一天才往下看那天的日誌列表），單一天查詢則直接跳過這層，行為不變 + 8/12 A5.0：日誌Tab整個改成班表式——最上面必選照服員(沒選整頁空白)，選定後畫面完全比照照服員app：月/日選擇器+當月未填banner(呼叫adminGetMissing)+單日班次列表(呼叫getDay，同時顯示已送出跟未填、依排定時間排序)。已送出點進去用adminEditLogFull改；未填點進去用新的adminCreateLog新增(前端組好合併字串一次送出，不再用adminFillMissing那套有bug的伺服器合併判斷)。列表最下面加「＋新增班次」按鈕，應付班表沒排的臨時補登，一樣呼叫adminCreateLog。需搭配後端V80(新增adminCreateLog+修復doPost白名單漏掉adminEditLogFull的bug)。 + 8/12 A5.1：分頁名稱「日誌」改成「班表調整」；「＋新增班次」存檔時同步補一列進「員工班表」(帶syncSchedule=1，未填補登不會帶，因為班表本來就有那筆)；修改既有班次時間時，也同步找員工班表對應列一併更新時段(需搭配後端V81)。 + 8/12 A5.2：選照服員/切換日期時，原本同時發出好幾個重的請求(getDay+getPhrases+adminGetMissing+adminGetLogs)，會佔用Apps Script執行資源、導致同時間照服員自己那邊的請求逾時失敗；改成依序排隊呼叫，降低瞬間負擔。 + 8/12 A5.3：實測發現A5.2依序呼叫仍無法完全避免admin.html跟index.html「兩個分開頁面」同時查詢互搶資源的狀況（照服員仍會偶發「班表載入失敗」），盧董決定暫時整個移除「班表調整」分頁（不在選單顯示、不會呼叫getDay/adminGetMissing），從根本上消除這個額外查詢來源；LogsTab元件程式碼保留在檔案內但未使用，之後如果要做後端排隊鎖(LockService)解決根本問題，可以再重新掛上去。目前分頁只剩：漏填、名單、班表(上傳)。 -->
 <html lang="zh-Hant">
 <head>
 <meta charset="UTF-8">
@@ -390,7 +390,7 @@ const YouanLogo = ({size=30}) => React.createElement("img",{src:LOGO_SRC,alt:"�
 
 const PillTitle = ({icon,children}) => React.createElement("div",{style:{display:"inline-flex",alignItems:"center",gap:8,background:C.primary,color:"white",borderRadius:22,padding:"7px 18px",fontSize:19,fontWeight:700}},icon&&React.createElement("span",{style:{fontSize:19}},icon),children);
 
-const FooterBar = () => React.createElement("div",{style:{background:C.primary,padding:"16px",display:"flex",alignItems:"center",justifyContent:"center",gap:10,marginTop:10}},React.createElement(YouanLogo,{size:32,color:C.bear}),React.createElement("div",{style:{textAlign:"center"}},React.createElement("div",{style:{color:"white",fontSize:16,fontWeight:700,letterSpacing:1}},"佑安居家長照機構"),React.createElement("div",{style:{color:"rgba(255,255,255,.6)",fontSize:9,letterSpacing:1}},"Youan Long Term Care Institutions　A5.2")));
+const FooterBar = () => React.createElement("div",{style:{background:C.primary,padding:"16px",display:"flex",alignItems:"center",justifyContent:"center",gap:10,marginTop:10}},React.createElement(YouanLogo,{size:32,color:C.bear}),React.createElement("div",{style:{textAlign:"center"}},React.createElement("div",{style:{color:"white",fontSize:16,fontWeight:700,letterSpacing:1}},"佑安居家長照機構"),React.createElement("div",{style:{color:"rgba(255,255,255,.6)",fontSize:9,letterSpacing:1}},"Youan Long Term Care Institutions　A5.3")));
 
 const endHourOf = t => { const m=t.match(/~(\d{2}):(\d{2})/); return m?parseInt(m[1])+parseInt(m[2])/60:24; };
 
@@ -1503,10 +1503,10 @@ function UploadTab({me}){
 
 // 主介面
 function AdminMain({me, onLogout}){
-  const [tab,setTab] = useState("logs");
+  const [tab,setTab] = useState("missing");
   const tabs = me.role==="管理員"
-    ? [["logs","📋 班表調整"],["missing","📝 漏填"],["staff","👥 名單"],["upload","📤 班表"]]
-    : [["logs","📋 班表調整"],["missing","📝 漏填"],["staff","👥 名單"]];
+    ? [["missing","📝 漏填"],["staff","👥 名單"],["upload","📤 班表"]]
+    : [["missing","📝 漏填"],["staff","👥 名單"]];
   // 更改密碼彈窗
   const [showPw,setShowPw] = useState(false);
   const [oldPw,setOldPw] = useState("");
@@ -1598,7 +1598,7 @@ function AdminMain({me, onLogout}){
       // 第一排：Logo + 標題
       e("div",{style:{display:"flex",alignItems:"center",gap:10}},
         e(YouanLogo,{size:34,color:C.bear}),
-        e("div",{style:{fontSize:22,fontWeight:700}},"佑安管理介面　A5.2")),
+        e("div",{style:{fontSize:22,fontWeight:700}},"佑安管理介面　A5.3")),
       // 維護模式狀態列（僅管理員看得到、可操作，點一下即可切換，不用改任何程式碼、不用重新部署）
       me.role==="管理員" && e("div",{
         onClick: maintBusy ? undefined : toggleMaintenance,
@@ -1636,7 +1636,8 @@ function AdminMain({me, onLogout}){
     e("div",{style:{display:"flex",background:C.card,borderBottom:`2px solid ${C.border}`,position:"sticky",top:0,zIndex:29}},
       tabs.map(([key,label])=>e("button",{key:key,onClick:()=>setTab(key),style:{flex:1,padding:"16px 4px",border:"none",borderBottom:tab===key?`3px solid ${C.primary}`:"3px solid transparent",background:"none",color:tab===key?C.primary:C.textSub,fontSize:19,fontWeight:tab===key?700:500,cursor:"pointer",fontFamily:"inherit"}},label))),
     // 內容
-    tab==="logs" && e(LogsTab,{me, viewSup, key:"logs_"+viewSup}),
+    // ★A5.3：暫時移除「班表調整」分頁（getDay式班表查詢跟照服員自己使用時搶Apps Script執行資源，
+    //   會導致照服員那邊「班表載入失敗」，等之後有空做後端排隊鎖再重新開放）
     tab==="missing" && e(MissingTab,{me, viewSup, key:"missing_"+viewSup}),
     tab==="staff" && e(StaffTab,{me, viewSup, key:"staff_"+viewSup}),
     tab==="upload" && me.role==="管理員" && e(UploadTab,{me, key:"upload"}),
