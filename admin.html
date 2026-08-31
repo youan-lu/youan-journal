@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+<!-- 管理介面 admin.html A4.7 -- 8/31 A4.7：上傳個案名單時，①排除案號不是8碼的資料(喘息/GA碼個案案號是6碼，不屬於服務日誌系統管理範圍)，②解析結果依案號由小到大排序後才送出。其餘功能沿用A4.6不變。 -->
 <!-- 管理介面 admin.html A4.6 -- 8/31 A4.6：支援直接上傳仁寶匯出的zip壓縮檔（不用先手動解壓，加入JSZip套件），並修正個案總表解析邏輯的bug——原本只要分頁裡有「案號」「姓名」欄位就會被誤判成個案主表，導致仁寶檔案裡的「服務狀態、身分別變更紀錄」歷史異動分頁被誤認、拿不完整的資料把正確的主責督導/主責照服員蓋掉。改成9個目標欄位要對到至少7個才採信，並把去重邏輯改成保留欄位較完整的那一筆，不是單純用後面蓋前面。其餘功能沿用A4.5不變。 -->
 <!-- 管理介面 admin.html A4.5 -- 8/31 A4.5：分頁名稱「📤班表」改成「📤上傳資料」，避免只看名字誤以為裡面只有班表上傳(裡面同時有上傳班表跟上傳個案名單兩張卡片)。其餘功能沿用A4.4不變。 -->
 <!-- 管理介面 admin.html A4.4 -- 8/31 A4.4：新增「📤上傳個案名單」— 比照現有上傳班表架構，讓管理員一鍵把仁寶匯出的「個案總表」xlsx匯入更新個案名單分頁，依案號比對(已有更新/沒有新增)，常用BA碼與服務地點備註保留原值不被覆蓋，需搭配後端V84的uploadCases。分頁名稱「📤班表」改成「📤上傳資料」，避免只看名字誤以為裡面只有班表上傳。其餘功能沿用A4.3內容不變。 -->
@@ -408,7 +409,7 @@ const YouanLogo = ({size=30}) => React.createElement("img",{src:LOGO_SRC,alt:"�
 
 const PillTitle = ({icon,children}) => React.createElement("div",{style:{display:"inline-flex",alignItems:"center",gap:8,background:C.primary,color:"white",borderRadius:22,padding:"7px 18px",fontSize:19,fontWeight:700}},icon&&React.createElement("span",{style:{fontSize:19}},icon),children);
 
-const FooterBar = () => React.createElement("div",{style:{background:C.primary,padding:"16px",display:"flex",alignItems:"center",justifyContent:"center",gap:10,marginTop:10}},React.createElement(YouanLogo,{size:32,color:C.bear}),React.createElement("div",{style:{textAlign:"center"}},React.createElement("div",{style:{color:"white",fontSize:16,fontWeight:700,letterSpacing:1}},"佑安居家長照機構"),React.createElement("div",{style:{color:"rgba(255,255,255,.6)",fontSize:9,letterSpacing:1}},"Youan Long Term Care Institutions　A4.6")));
+const FooterBar = () => React.createElement("div",{style:{background:C.primary,padding:"16px",display:"flex",alignItems:"center",justifyContent:"center",gap:10,marginTop:10}},React.createElement(YouanLogo,{size:32,color:C.bear}),React.createElement("div",{style:{textAlign:"center"}},React.createElement("div",{style:{color:"white",fontSize:16,fontWeight:700,letterSpacing:1}},"佑安居家長照機構"),React.createElement("div",{style:{color:"rgba(255,255,255,.6)",fontSize:9,letterSpacing:1}},"Youan Long Term Care Institutions　A4.7")));
 
 const endHourOf = t => { const m=t.match(/~(\d{2}):(\d{2})/); return m?parseInt(m[1])+parseInt(m[2])/60:24; };
 
@@ -1384,6 +1385,8 @@ function UploadTab({me}){
         const get=(srcName)=>{ const i=colIdx[srcName]; return (i===undefined)?"":String(row[i]||"").trim(); };
         const caseNo=get("案號"), name=get("姓名");
         if(!name) continue;   // 姓名是必要欄位
+        // 案號應為8碼；喘息(GA碼)個案案號是6碼，不屬於服務日誌系統管理範圍，排除不寫入
+        if(caseNo && !/^\d{8}$/.test(caseNo)) continue;
         rows.push([
           caseNo, name, get("主責督導"), get("主責居服員"),
           get("目前狀態"), get("CMS等級"), get("福利身份別"),
@@ -1426,6 +1429,8 @@ function UploadTab({me}){
       } else {
         rows=parseCasesFromXlsxBuf(await casesFile.arrayBuffer());
       }
+      // 依案號由小到大排序（案號是8碼數字字串，直接字串排序結果跟數字排序一致）
+      rows.sort((a,b)=>String(a[0]||"").localeCompare(String(b[0]||"")));
       if(rows.length===0){ setCasesMsg("❌ 解析為空，請確認上傳的是仁寶「個案總表」xlsx或包含它的zip"); setCasesUploading(false); return; }
       setCasesMsg("解析完成："+rows.length+" 筆，上傳中…");
       const resp=await fetch(API,{method:"POST",body:JSON.stringify({action:"uploadCases",empId:me.empId,role:me.role,rows:JSON.stringify(rows)})});
@@ -1664,7 +1669,7 @@ function AdminMain({me, onLogout}){
       // 第一排：Logo + 標題
       e("div",{style:{display:"flex",alignItems:"center",gap:10}},
         e(YouanLogo,{size:34,color:C.bear}),
-        e("div",{style:{fontSize:22,fontWeight:700}},"佑安管理介面　A4.6")),
+        e("div",{style:{fontSize:22,fontWeight:700}},"佑安管理介面　A4.7")),
       // 維護模式狀態列（僅管理員看得到、可操作，點一下即可切換，不用改任何程式碼、不用重新部署）
       me.role==="管理員" && e("div",{
         onClick: maintBusy ? undefined : toggleMaintenance,
