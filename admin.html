@@ -1328,6 +1328,65 @@ function UploadTab({me}){
   const [schedFile2,setSchedFile2] = useState(null);
   const [uploading,setUploading] = useState(false);
   const [uploadMsg,setUploadMsg] = useState("");
+  const [casesFile,setCasesFile] = useState(null);
+  const [casesUploading,setCasesUploading] = useState(false);
+  const [casesMsg,setCasesMsg] = useState("");
+
+  // 個案名單解析：讀仁寶「個案總表」匯出檔，用標題文字比對欄位位置（不寫死欄號，
+  // 避免仁寶改版欄位順序就整支壞掉）。找含「案號」跟「姓名」的那一列當標題列。
+  const CASE_FIELD_MAP = [
+    ["案號","案號"],["姓名","姓名"],["主責督導","主責督導"],["主責居服員","主責照服員"],
+    ["目前狀態","現在狀態"],["CMS等級","CMS等級"],["福利身份別","福利身份別"],
+    ["建立日期","建立日期"],["備註","備註"]
+  ];
+  const parseCasesWb=(wb)=>{
+    const rows=[];
+    wb.SheetNames.forEach(name=>{
+      const d=XLSX.utils.sheet_to_json(wb.Sheets[name],{header:1,defval:""});
+      // 找標題列：某一列同時出現「案號」跟「姓名」文字
+      let headerRowIdx=-1, colIdx={};
+      for(let r=0;r<Math.min(d.length,10);r++){
+        const rowTxt=(d[r]||[]).map(x=>String(x||"").trim());
+        if(rowTxt.includes("案號") && rowTxt.includes("姓名")){
+          headerRowIdx=r;
+          CASE_FIELD_MAP.forEach(([srcName])=>{
+            const idx=rowTxt.indexOf(srcName);
+            if(idx>=0) colIdx[srcName]=idx;
+          });
+          break;
+        }
+      }
+      if(headerRowIdx<0 || colIdx["案號"]===undefined || colIdx["姓名"]===undefined) return;   // 這個分頁不是個案總表，跳過
+      for(let r=headerRowIdx+1;r<d.length;r++){
+        const row=d[r]; if(!row)continue;
+        const get=(srcName)=>{ const i=colIdx[srcName]; return (i===undefined)?"":String(row[i]||"").trim(); };
+        const caseNo=get("案號"), name=get("姓名");
+        if(!name) continue;   // 姓名是必要欄位
+        rows.push([
+          caseNo, name, get("主責督導"), get("主責居服員"),
+          get("目前狀態"), get("CMS等級"), get("福利身份別"),
+          get("建立日期"), get("備註")
+        ]);
+      }
+    });
+    return rows;
+  };
+  const doUploadCases=async()=>{
+    if(!casesFile){ setCasesMsg("❌ 請先選擇個案總表檔案"); return; }
+    setCasesUploading(true); setCasesMsg("解析中…");
+    try{
+      const wb=XLSX.read(await casesFile.arrayBuffer(),{type:"array"});
+      const rows=parseCasesWb(wb);
+      if(rows.length===0){ setCasesMsg("❌ 解析為空，請確認上傳的是仁寶「個案總表」xlsx"); setCasesUploading(false); return; }
+      setCasesMsg("解析完成："+rows.length+" 筆，上傳中…");
+      const resp=await fetch(API,{method:"POST",body:JSON.stringify({action:"uploadCases",empId:me.empId,role:me.role,rows:JSON.stringify(rows)})});
+      const r=await resp.json();
+      setCasesMsg(r.ok?("✅ "+r.msg):("❌ "+r.msg));
+      if(r.ok){ setCasesFile(null); }
+    }catch(err){ setCasesMsg("❌ 上傳失敗："+err.message); }
+    setCasesUploading(false);
+  };
+
 
   // 班表解析：支援「工具轉換後的可上傳檔」與「仁寶原始排班表」
   const parseConvertedWb=(wb)=>{
@@ -1442,7 +1501,21 @@ function UploadTab({me}){
           cursor:(uploading||!schedFile1)?"default":"pointer",marginBottom:10,fontFamily:"inherit"}},
         uploading?"處理中…":"開始上傳"),
       uploadMsg&&e("div",{style:{fontSize:16,fontWeight:600,lineHeight:1.6,
-        color:uploadMsg.includes("✅")?C.ok:uploadMsg.includes("❌")?C.danger:C.textSub}},uploadMsg)));
+        color:uploadMsg.includes("✅")?C.ok:uploadMsg.includes("❌")?C.danger:C.textSub}},uploadMsg)),
+    e("div",{style:{background:"#fff",borderRadius:10,padding:16,border:`1.5px solid ${C.primary}`,marginTop:16}},
+      e("div",{style:{fontSize:20,fontWeight:700,color:C.primary,marginBottom:6}},"📤 上傳個案名單"),
+      e("div",{style:{fontSize:15,color:C.textSub,marginBottom:14,lineHeight:1.6}},"上傳仁寶匯出的「個案總表」xlsx，依案號比對：已有的更新、沒有的新增。常用BA碼、服務地點備註這兩欄會保留原本內容，不會被覆蓋。"),
+      e("div",{style:{marginBottom:16}},
+        e("input",{type:"file",accept:".xlsx,.xls",disabled:casesUploading,
+          onChange:ev=>{ setCasesFile(ev.target.files[0]||null); setCasesMsg(""); },
+          style:{fontSize:15,width:"100%"}})),
+      e("button",{onClick:doUploadCases,disabled:casesUploading||!casesFile,
+        style:{width:"100%",padding:"14px",fontSize:18,fontWeight:700,borderRadius:9,border:"none",
+          background:(casesUploading||!casesFile)?"#ccc":C.primary,color:"#fff",
+          cursor:(casesUploading||!casesFile)?"default":"pointer",marginBottom:10,fontFamily:"inherit"}},
+        casesUploading?"處理中…":"開始上傳"),
+      casesMsg&&e("div",{style:{fontSize:16,fontWeight:600,lineHeight:1.6,
+        color:casesMsg.includes("✅")?C.ok:casesMsg.includes("❌")?C.danger:C.textSub}},casesMsg)));
 }
 
 // 主介面
