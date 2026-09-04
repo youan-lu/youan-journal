@@ -514,7 +514,7 @@ const SkinStatus = ({value,onChange}) => {
 const CodeBlock = ({codeItem,value,onChange,onAddChip,extra,onRemove,fromLast,chips,onSaveTemplate,saved,pending}) => {
   const [showChips,setShowChips] = useState(false);
   const [showMore,setShowMore] = useState(false);
-  const allChips=[...chips].sort((a,b)=>b.freq-a.freq);
+  const _sorted=[...chips].sort((a,b)=>b.freq-a.freq);const personalChips=_sorted.filter(x=>x.personal);const generalChips=_sorted.filter(x=>!x.personal);const allChips=_sorted;
   const addChip = phrase => { onAddChip(phrase); };
   const has = t => (value||"").split("、").includes(t);
   const Chip=({c})=>React.createElement("button",{onClick:()=>addChip(c.t),disabled:has(c.t),style:{background:has(c.t)?C.okLight:C.primaryLight,border:`1px solid ${has(c.t)?C.ok:C.border}`,borderRadius:14,padding:"5px 11px",fontSize:18,color:has(c.t)?C.ok:C.text,cursor:has(c.t)?"default":"pointer"}},has(c.t)?"✓ ":"+ ",c.t);
@@ -532,9 +532,16 @@ const CodeBlock = ({codeItem,value,onChange,onAddChip,extra,onRemove,fromLast,ch
         React.createElement("button",{onClick:()=>onChange(""),style:{background:"none",border:"none",color:C.textSub,fontSize:22,cursor:"pointer",padding:0}},"清空"),
         React.createElement("button",{onClick:onSaveTemplate,disabled:saved||pending,style:{background:"none",border:"none",color:saved?C.ok:(pending?C.textSub:C.accent),fontSize:22,cursor:(saved||pending)?"default":"pointer",padding:0,fontWeight:600}},saved?"✓ 已加入":(pending?"⏳ 處理中…":"⭐ 加入資料庫"))),
       showChips&&React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:8,marginTop:2}},
-        allChips.length>0?React.createElement("div",null,
-          React.createElement("div",{style:{display:"flex",flexWrap:"wrap",gap:6}},allChips.slice(0,showMore?allChips.length:10).map((c,i)=>React.createElement(Chip,{key:i,c}))),
-          allChips.length>10&&React.createElement("button",{onClick:()=>setShowMore(v=>!v),style:{background:"none",border:"none",color:C.primary,fontSize:17,cursor:"pointer",padding:"6px 0 0 0",fontWeight:600}},showMore?"▲ 收起":`⋯ 更多 (${allChips.length-10})`)):
+        (personalChips.length>0||generalChips.length>0)?React.createElement("div",null,
+          personalChips.length>0&&React.createElement("div",{style:{display:"flex",flexWrap:"wrap",gap:6}},personalChips.map((c,i)=>React.createElement(Chip,{key:"p"+i,c}))),
+          personalChips.length===0&&React.createElement("div",{style:{fontSize:16,color:C.textSub,marginBottom:2}},"這個個案這個項目尚無常用資料"),
+          generalChips.length>0&&React.createElement("div",{style:{marginTop:8}},
+            React.createElement("button",{onClick:()=>setShowMore(v=>!v),style:{background:"none",border:"none",color:C.primary,fontSize:16,cursor:"pointer",padding:"4px 0",fontWeight:600}},showMore?"▲ 收起通用範本":`⋯ 更多通用範本 (${generalChips.length})`),
+            showMore&&React.createElement("div",{style:{marginTop:6}},
+              React.createElement("div",{style:{fontSize:14,color:C.textSub,marginBottom:4}},"通用範本（其他個案／範本庫，請確認是否適用）"),
+              React.createElement("div",{style:{display:"flex",flexWrap:"wrap",gap:6}},generalChips.map((c,i)=>React.createElement(Chip,{key:"g"+i,c})))
+            )
+          )):
         React.createElement("div",{style:{fontSize:17,color:C.textSub}},"尚無常用資料，可直接打字或語音輸入"))));
 };
 
@@ -903,7 +910,7 @@ function App() {
           const skey=`${qkey}_${slotOf(s.time)}`;       // ★再依時段區間區分同天多班次
           const list=(phrasesSlot[skey]&&phrasesSlot[skey].length>0)?phrasesSlot[skey]
                     :(phrasesQty[qkey]&&phrasesQty[qkey].length>0)?phrasesQty[qkey]
-                    :(phrases[key]&&phrases[key].length>0?phrases[key]:byCode[c.code]);
+                    :(phrases[key]&&phrases[key].length>0?phrases[key]:[]);
           if(list&&list.length>0){init[c.code]=list[0].text;fl[c.code]=true;}
         }
       });
@@ -927,7 +934,7 @@ function App() {
         const skey=`${qkey}_${slotOf(s.time)}`;       // ★再依時段區間區分同天多班次
         const list=(phrasesSlot[skey]&&phrasesSlot[skey].length>0)?phrasesSlot[skey]
                   :(phrasesQty[qkey]&&phrasesQty[qkey].length>0)?phrasesQty[qkey]
-                  :(phrases[key]&&phrases[key].length>0?phrases[key]:byCode[c.code]);
+                  :(phrases[key]&&phrases[key].length>0?phrases[key]:[]);
         if(list&&list.length>0){init[c.code]=list[0].text;fl[c.code]=true;}
       });
       setCodeValues(init); setFromLastMap(fl); setExtraCodes([]);
@@ -1036,7 +1043,7 @@ function App() {
     React.createElement("div",{style:{background:C.primary,color:"white",padding:"16px 16px 14px",position:"sticky",top:0,zIndex:10}},
       React.createElement("div",{style:{display:"flex",alignItems:"center",justifyContent:"center",gap:10,marginBottom:6}},
         React.createElement(YouanLogo,{size:34,color:C.bear}),
-        React.createElement("div",{style:{fontSize:20,fontWeight:700,letterSpacing:.5,lineHeight:1.3}},"佑安服務日誌線上填寫系統 I54")),
+        React.createElement("div",{style:{fontSize:20,fontWeight:700,letterSpacing:.5,lineHeight:1.3}},"佑安服務日誌線上填寫系統 I55")),
       React.createElement("div",{style:{fontSize:21,opacity:.85,marginTop:6,textAlign:"center"}},today,"　現在 ",NOW_STR)),
     // 離線佇列提示橫幅
     (()=>{
