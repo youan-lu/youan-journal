@@ -3,6 +3,7 @@
 <!-- 管理介面 admin.html A4.6 -- 8/31 A4.6：支援直接上傳仁寶匯出的zip壓縮檔（不用先手動解壓，加入JSZip套件），並修正個案總表解析邏輯的bug——原本只要分頁裡有「案號」「姓名」欄位就會被誤判成個案主表，導致仁寶檔案裡的「服務狀態、身分別變更紀錄」歷史異動分頁被誤認、拿不完整的資料把正確的主責督導/主責照服員蓋掉。改成9個目標欄位要對到至少7個才採信，並把去重邏輯改成保留欄位較完整的那一筆，不是單純用後面蓋前面。其餘功能沿用A4.5不變。 -->
 <!-- 管理介面 admin.html A4.5 -- 8/31 A4.5：分頁名稱「📤班表」改成「📤上傳資料」，避免只看名字誤以為裡面只有班表上傳(裡面同時有上傳班表跟上傳個案名單兩張卡片)。其餘功能沿用A4.4不變。 -->
 <!-- 管理介面 admin.html A4.4 -- 8/31 A4.4：新增「📤上傳個案名單」— 比照現有上傳班表架構，讓管理員一鍵把仁寶匯出的「個案總表」xlsx匯入更新個案名單分頁，依案號比對(已有更新/沒有新增)，常用BA碼與服務地點備註保留原值不被覆蓋，需搭配後端V84的uploadCases。分頁名稱「📤班表」改成「📤上傳資料」，避免只看名字誤以為裡面只有班表上傳。其餘功能沿用A4.3內容不變。 -->
+<!-- 10/5 A4.8：漏填統計加「班」數（同天同員工同個案同時段=一班），總計行與每位照服員行皆顯示「天／班／筆」，與月底對帳的「班」口徑對齊。其餘沿用A4.7不變。 -->
 <!-- 佑安管理介面 admin.html A4.3 -- 漏填顯示天數+筆數  上傳班表(僅管理員)  漏填依照服員分組  漏填加照服員篩選  漏填修復(移除empId誤傳) + 移除異常分頁 + 視角切換 + 更改密碼 漏填三模式(週/月/區間) + 員工增刪改密碼 + 上傳班表自我去重(同年/月/日/員工/時段/個案只留一筆，修正來源檔重複解析導致班表重複) + 維護模式開關(管理員一鍵暫停照服員送出功能) + 8/5修：漏填補填改成只補真正缺的那一碼(帶code參數)，不再整個時段全部BA碼重寫，避免重複寫入已存在的碼 + 8/6 v3.9：日誌編輯區改成跟照服員介面一樣一格一格BA碼(可改班次時間/增減改碼別數量/各碼各自服務內容/皮膚狀況/狀態/備註)，儲存組回新格式一列送後端 adminEditLogFull(需搭配後端 v75) + 8/8 A4.0：日誌查詢改成日期區間(起訖/今日/本週/本月快速鍵)+依日期分組顯示(跟照服員介面同樣呈現方式)；編輯日誌每格BA碼新增「📋資料庫」常用內容展開＋「⭐加入資料庫」按鈕，資料來源呼叫getPhrases(跟照服員介面同一支API)，存範本呼叫savePhrase + 8/8 A4.1：日誌Tab改成跟照服員介面同款「兩層」導覽——第一層列表只顯示精簡卡片(時間/個案/照服員/狀態/BA碼標籤)，點進去才切換到獨立的第二層詳情/編輯畫面(頂部深綠色列+←返回按鈕，樣式完全比照照服員填寫畫面) + 8/8 A4.2：查詢結果橫跨多天時，插入一層「日期選單」（先列出每天各幾筆，點某一天才往下看那天的日誌列表），單一天查詢則直接跳過這層，行為不變 + 8/12 A5.0：日誌Tab整個改成班表式——最上面必選照服員(沒選整頁空白)，選定後畫面完全比照照服員app：月/日選擇器+當月未填banner(呼叫adminGetMissing)+單日班次列表(呼叫getDay，同時顯示已送出跟未填、依排定時間排序)。已送出點進去用adminEditLogFull改；未填點進去用新的adminCreateLog新增(前端組好合併字串一次送出，不再用adminFillMissing那套有bug的伺服器合併判斷)。列表最下面加「＋新增班次」按鈕，應付班表沒排的臨時補登，一樣呼叫adminCreateLog。需搭配後端V80(新增adminCreateLog+修復doPost白名單漏掉adminEditLogFull的bug)。 + 8/12 A5.1：分頁名稱「日誌」改成「班表調整」；「＋新增班次」存檔時同步補一列進「員工班表」(帶syncSchedule=1，未填補登不會帶，因為班表本來就有那筆)；修改既有班次時間時，也同步找員工班表對應列一併更新時段(需搭配後端V81)。 + 8/12 A5.2：選照服員/切換日期時，原本同時發出好幾個重的請求(getDay+getPhrases+adminGetMissing+adminGetLogs)，會佔用Apps Script執行資源、導致同時間照服員自己那邊的請求逾時失敗；改成依序排隊呼叫，降低瞬間負擔。 + 8/12 A5.3：實測發現A5.2依序呼叫仍無法完全避免admin.html跟index.html「兩個分開頁面」同時查詢互搶資源的狀況（照服員仍會偶發「班表載入失敗」），盧董決定暫時整個移除「班表調整」分頁（不在選單顯示、不會呼叫getDay/adminGetMissing），從根本上消除這個額外查詢來源；LogsTab元件程式碼保留在檔案內但未使用，之後如果要做後端排隊鎖(LockService)解決根本問題，可以再重新掛上去。目前分頁只剩：漏填、名單、班表(上傳)。 + 8/12 A5.4：找到問題還沒解決的真正原因——A5.3把預設分頁改成「漏填」，而漏填分頁原本設計就是一開啟就自動useEffect觸發全體照服員範圍的adminGetMissing查詢(這是既有邏輯，不是這次新加的)，導致即使拿掉班表調整，admin.html只要開著(哪怕在背景分頁沒人看)還是會自動打一次重查詢。這版拿掉自動useEffect，改成必須手動按「🔍 查詢漏填」按鈕才會真的查詢。 + 8/12 A4.3：8/12當天A5.0～A5.4的「班表調整」班表式介面(呼叫getDay/adminGetMissing)實測會跟照服員自己使用index.html搶Apps Script執行資源、導致「班表載入失敗」，盧董決定整批取消，退回A4.2內容重建：日誌分頁=日期區間篩選+日期選單中間層+兩層列表/編輯，只用adminGetLogs/adminEditLogFull；「漏填」分頁保留拿掉自動useEffect的修正(要手動按查詢)。後端維持V79(盧董已手動退回，V80/V81新增的東西這版前端不會呼叫)。 -->
 <html lang="zh-Hant">
 <head>
@@ -1120,7 +1121,7 @@ function MissingTab({me, viewSup}){
 
     loading && e("div",{style:{textAlign:"center",padding:50,color:C.textSub,fontSize:17}},"查詢中…"),
     !loading && loaded && missing.length===0 && e("div",{style:{textAlign:"center",padding:60,color:C.ok,fontSize:19,lineHeight:1.8}},"✅",e("br"),"此範圍無漏填"),
-    !loading && missing.length>0 && e("div",{style:{fontSize:16,color:C.warn,marginBottom:12,fontWeight:600}},"共 "+(new Set(missing.map(m=>m.month+"/"+m.day)).size)+" 天、"+missing.length+" 筆未填"),
+    !loading && missing.length>0 && e("div",{style:{fontSize:16,color:C.warn,marginBottom:12,fontWeight:600}},"共 "+(new Set(missing.map(m=>m.month+"/"+m.day)).size)+" 天、"+(new Set(missing.map(m=>m.month+"/"+m.day+"|"+m.empId+"|"+m.client+"|"+(m.time||""))).size)+" 班、"+missing.length+" 筆未填"),
     fillMsg && e("div",{style:{fontSize:15,color:fillMsg.startsWith("✓")?C.ok:C.danger,marginBottom:10,fontWeight:600}},fillMsg),
     // 單筆卡片（共用）
     (()=>{
@@ -1150,6 +1151,7 @@ function MissingTab({me, viewSup}){
       });
       const keys = Object.keys(grp).sort((a,b)=>grp[b].list.length-grp[a].list.length);
       const dayCount = (list)=> new Set(list.map(m=>m.month+"/"+m.day)).size;
+      const shiftCount = (list)=> new Set(list.map(m=>m.month+"/"+m.day+"|"+m.empId+"|"+m.client+"|"+(m.time||""))).size;   // ★A4.8：班次數（同天同員工同個案同時段=一班）
       return keys.map(id=>{
         const g = grp[id];
         const open = !!openGrp[id];
@@ -1158,7 +1160,7 @@ function MissingTab({me, viewSup}){
           e("div",{onClick:()=>setOpenGrp(p=>({...p,[id]:!p[id]})),
             style:{background:open?C.primary:C.card,color:open?"white":C.text,borderRadius:10,padding:"14px 16px",border:`1.5px solid ${open?C.primary:C.border}`,cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}},
             e("span",{style:{fontSize:19,fontWeight:700}},g.name),
-            e("span",{style:{fontSize:17,fontWeight:600,color:open?"white":C.warn}},"漏填 "+g.list.length+" 筆（"+dayCount(g.list)+" 天）"+(open?" ▲":" ▼"))),
+            e("span",{style:{fontSize:17,fontWeight:600,color:open?"white":C.warn}},"漏填 "+shiftCount(g.list)+" 班 "+g.list.length+" 筆（"+dayCount(g.list)+" 天）"+(open?" ▲":" ▼"))),
           // 展開明細
           open && e("div",{style:{marginTop:8,paddingLeft:6}},
             g.list.map((m,i)=>entryCard(m,i,false)),
@@ -1669,7 +1671,7 @@ function AdminMain({me, onLogout}){
       // 第一排：Logo + 標題
       e("div",{style:{display:"flex",alignItems:"center",gap:10}},
         e(YouanLogo,{size:34,color:C.bear}),
-        e("div",{style:{fontSize:22,fontWeight:700}},"佑安管理介面　A4.7")),
+        e("div",{style:{fontSize:22,fontWeight:700}},"佑安管理介面　A4.8")),
       // 維護模式狀態列（僅管理員看得到、可操作，點一下即可切換，不用改任何程式碼、不用重新部署）
       me.role==="管理員" && e("div",{
         onClick: maintBusy ? undefined : toggleMaintenance,
