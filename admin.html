@@ -977,7 +977,6 @@ function LogsTab({me, viewSup}){
 }
 function MissingTab({me, viewSup}){
   const [missing,setMissing] = useState([]);
-  const [qtyBad,setQtyBad] = useState([]);   // ★A5.2：支數不符清單
   const [loading,setLoading] = useState(false);
   const [loaded,setLoaded] = useState(false);
   const [mode,setMode] = useState("week"); // week / month / range
@@ -1042,7 +1041,6 @@ function MissingTab({me, viewSup}){
   async function fillAll(){ await fillList([...missing], "全部"); }
   // 分組展開狀態 {empId: true/false}
   const [openGrp,setOpenGrp] = useState({});
-  const [openQGrp,setOpenQGrp] = useState({});   // ★A5.3：支數不符分組展開狀態
 
   // 產生日期清單 [{month,day}]
   function buildDates(){
@@ -1080,7 +1078,7 @@ function MissingTab({me, viewSup}){
       const q = {role:me.role,dates:JSON.stringify(dates),viewSup:viewSup||""};
       if(fEmp) q.empId = fEmp;
       const r = await adminAPI("adminGetMissing",q);
-      setMissing(r.ok?(r.missing||[]):[]); setQtyBad(r.ok?(r.qtyMismatch||[]):[]); setLoaded(true);
+      setMissing(r.ok?(r.missing||[]):[]); setLoaded(true);
     }catch(ex){}
     setLoading(false);
   }
@@ -1120,11 +1118,9 @@ function MissingTab({me, viewSup}){
     // ★A4.9：批次補填功能已移除（補登一律改用月底對帳工具「未填報_一鍵補登」）
 
     loading && e("div",{style:{textAlign:"center",padding:50,color:C.textSub,fontSize:17}},"查詢中…"),
-    !loading && loaded && missing.length===0 && qtyBad.length===0 && e("div",{style:{textAlign:"center",padding:60,color:C.ok,fontSize:19,lineHeight:1.8}},"✅",e("br"),"此範圍無漏填、支數也相符"),
+    !loading && loaded && missing.length===0 && e("div",{style:{textAlign:"center",padding:60,color:C.ok,fontSize:19,lineHeight:1.8}},"✅",e("br"),"此範圍無漏填"),
     !loading && missing.length>0 && e("div",{style:{fontSize:16,color:C.warn,marginBottom:12,fontWeight:600}},"共 "+(new Set(missing.map(m=>m.month+"/"+m.day)).size)+" 天、"+(new Set(missing.map(m=>m.month+"/"+m.day+"|"+m.empId+"|"+m.client+"|"+(m.time||""))).size)+" 班、"+missing.length+" 筆未填"),
     fillMsg && e("div",{style:{fontSize:15,color:fillMsg.startsWith("✓")?C.ok:C.danger,marginBottom:10,fontWeight:600}},fillMsg),
-    // ★A5.4：支數不符已改為「折進漏填」（後端 v92 把整班當沒填），不再獨立顯示；
-    //   在下方漏填卡以紅字「⚠ 支數不符·需重填」標註。
     // 單筆卡片（共用）
     (()=>{
       // ★A4.9：把「一碼一筆」的清單合併成「一班一筆」（同天+同員工+同個案+同時段），codes 列出該班缺的碼
@@ -1132,9 +1128,8 @@ function MissingTab({me, viewSup}){
         const map = {}; const order = [];
         list.forEach(m=>{
           const k = m.month+"/"+m.day+"|"+m.empId+"|"+m.client+"|"+(m.time||"");
-          if(!map[k]){ map[k] = {month:m.month, day:m.day, empId:m.empId, empName:(m.empName||m.worker||m.empId), client:m.client, time:(m.time||""), codes:[], qtyBad:false}; order.push(k); }
+          if(!map[k]){ map[k] = {month:m.month, day:m.day, empId:m.empId, empName:(m.empName||m.worker||m.empId), client:m.client, time:(m.time||""), codes:[]}; order.push(k); }
           if(m.code && map[k].codes.indexOf(m.code)===-1) map[k].codes.push(m.code);
-          if(m.qtyBad) map[k].qtyBad = true;
         });
         const mins = t=>{ const mm=String(t||"").match(/(\d{1,2}):(\d{2})/); return mm?parseInt(mm[1],10)*60+parseInt(mm[2],10):0; };
         return order.map(k=>map[k]).sort((x,y)=>(x.month-y.month)||(x.day-y.day)||(mins(x.time)-mins(y.time)));
@@ -1147,8 +1142,7 @@ function MissingTab({me, viewSup}){
               e("span",{style:{fontSize:16,color:C.textSub}},(m.month||"")+"/"+(m.day||"")+" "+(m.time||""))),
             e("span",{style:{fontSize:17,color:C.warn,fontWeight:600}},m.client)),
           m.codes.length>0 && e("div",{style:{marginTop:8,display:"flex",flexWrap:"wrap",gap:6}},
-            m.codes.map((c,ci)=>e("span",{key:ci,style:{fontSize:14,color:C.warn,fontWeight:600,background:"#fff4e5",border:"1px solid #f0c080",borderRadius:6,padding:"2px 8px"}},c))),
-          m.qtyBad && e("div",{style:{marginTop:6,fontSize:13,fontWeight:700,color:C.danger}},"⚠ 支數不符·需重填"));
+            m.codes.map((c,ci)=>e("span",{key:ci,style:{fontSize:14,color:C.warn,fontWeight:600,background:"#fff4e5",border:"1px solid #f0c080",borderRadius:6,padding:"2px 8px"}},c))));
       };
       // 有選特定照服員 → 直接列明細
       if(fEmp) return groupShifts(missing).map((m,i)=>entryCard(m,i,false));
@@ -1664,7 +1658,7 @@ function AdminMain({me, onLogout}){
       // 第一排：Logo + 標題
       e("div",{style:{display:"flex",alignItems:"center",gap:10}},
         e(YouanLogo,{size:34,color:C.bear}),
-        e("div",{style:{fontSize:22,fontWeight:700}},"佑安管理介面　A5.4")),
+        e("div",{style:{fontSize:22,fontWeight:700}},"佑安管理介面　A5.1")),
       // 維護模式狀態列（僅管理員看得到、可操作，點一下即可切換，不用改任何程式碼、不用重新部署）
       me.role==="管理員" && e("div",{
         onClick: maintBusy ? undefined : toggleMaintenance,
