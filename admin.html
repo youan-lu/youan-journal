@@ -977,6 +977,7 @@ function LogsTab({me, viewSup}){
 }
 function MissingTab({me, viewSup}){
   const [missing,setMissing] = useState([]);
+  const [qtyBad,setQtyBad] = useState([]);   // ★A5.2：支數不符清單
   const [loading,setLoading] = useState(false);
   const [loaded,setLoaded] = useState(false);
   const [mode,setMode] = useState("week"); // week / month / range
@@ -1078,7 +1079,7 @@ function MissingTab({me, viewSup}){
       const q = {role:me.role,dates:JSON.stringify(dates),viewSup:viewSup||""};
       if(fEmp) q.empId = fEmp;
       const r = await adminAPI("adminGetMissing",q);
-      setMissing(r.ok?(r.missing||[]):[]); setLoaded(true);
+      setMissing(r.ok?(r.missing||[]):[]); setQtyBad(r.ok?(r.qtyMismatch||[]):[]); setLoaded(true);
     }catch(ex){}
     setLoading(false);
   }
@@ -1118,9 +1119,20 @@ function MissingTab({me, viewSup}){
     // ★A4.9：批次補填功能已移除（補登一律改用月底對帳工具「未填報_一鍵補登」）
 
     loading && e("div",{style:{textAlign:"center",padding:50,color:C.textSub,fontSize:17}},"查詢中…"),
-    !loading && loaded && missing.length===0 && e("div",{style:{textAlign:"center",padding:60,color:C.ok,fontSize:19,lineHeight:1.8}},"✅",e("br"),"此範圍無漏填"),
+    !loading && loaded && missing.length===0 && qtyBad.length===0 && e("div",{style:{textAlign:"center",padding:60,color:C.ok,fontSize:19,lineHeight:1.8}},"✅",e("br"),"此範圍無漏填、支數也相符"),
     !loading && missing.length>0 && e("div",{style:{fontSize:16,color:C.warn,marginBottom:12,fontWeight:600}},"共 "+(new Set(missing.map(m=>m.month+"/"+m.day)).size)+" 天、"+(new Set(missing.map(m=>m.month+"/"+m.day+"|"+m.empId+"|"+m.client+"|"+(m.time||""))).size)+" 班、"+missing.length+" 筆未填"),
     fillMsg && e("div",{style:{fontSize:15,color:fillMsg.startsWith("✓")?C.ok:C.danger,marginBottom:10,fontWeight:600}},fillMsg),
+    // ★A5.2：支數不符區塊（碼別都有填、但支數與班表不同，請照服員修正）
+    !loading && qtyBad.length>0 && e("div",{style:{marginBottom:14}},
+      e("div",{style:{fontSize:16,color:C.danger,marginBottom:10,fontWeight:700}},"⚠️ 支數不符 "+qtyBad.length+" 筆（碼別有填，但支數跟班表不同，請照服員修正）"),
+      qtyBad.map((q,i)=>e("div",{key:"q"+i,style:{background:"#fff0f0",borderRadius:10,marginBottom:8,padding:"12px 14px",border:"1px solid #f0b0b0"}},
+        e("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}},
+          e("div",null,
+            e("span",{style:{fontSize:18,fontWeight:700,color:C.text,marginRight:10}},q.empName||q.worker||q.empId),
+            e("span",{style:{fontSize:16,color:C.textSub}},(q.month||"")+"/"+(q.day||"")+" "+(q.time||""))),
+          e("span",{style:{fontSize:17,color:C.warn,fontWeight:600}},q.client)),
+        e("div",{style:{marginTop:8,fontSize:15,fontWeight:700,color:C.danger}},
+          q.code+"：班表 "+q.schedQty+" 支 ／ 日誌 "+q.logQty+" 支")))),
     // 單筆卡片（共用）
     (()=>{
       // ★A4.9：把「一碼一筆」的清單合併成「一班一筆」（同天+同員工+同個案+同時段），codes 列出該班缺的碼
@@ -1658,7 +1670,7 @@ function AdminMain({me, onLogout}){
       // 第一排：Logo + 標題
       e("div",{style:{display:"flex",alignItems:"center",gap:10}},
         e(YouanLogo,{size:34,color:C.bear}),
-        e("div",{style:{fontSize:22,fontWeight:700}},"佑安管理介面　A5.1")),
+        e("div",{style:{fontSize:22,fontWeight:700}},"佑安管理介面　A5.2")),
       // 維護模式狀態列（僅管理員看得到、可操作，點一下即可切換，不用改任何程式碼、不用重新部署）
       me.role==="管理員" && e("div",{
         onClick: maintBusy ? undefined : toggleMaintenance,
