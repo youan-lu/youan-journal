@@ -1514,13 +1514,12 @@ function UploadTab({me}){
         for(let col=0;col<dateCells.length;col++){
           const day=dateCells[col]; if(!day||col>=svcRow.length)continue;
           const cell=String(svcRow[col]||""); if(!cell||cell===".")continue;
-          const pat=/(\d{1,2}:\d{2})~(\d{1,2}:\d{2})\s+([\u4e00-\u9fff]+)\s*\n?\[([^\]]+)\]\s*\n?((?:(?:BA|GA)\w+[^\n,]*×\d+[,\s]*)+)/g;
+          const pat=/(\d{1,2}:\d{2})~(\d{1,2}:\d{2})\s+([\u4e00-\u9fff]+)\s*\n?\[([^\]]+)\]\s*\n?((?:(?:BA|GA|SC)\w+[^\n,]*×\d+[,\s]*)+)/g;
           let mt,seq=1;
           while((mt=pat.exec(cell))!==null){
             const ba17map=[[/人工氣道|氣切/,"a"],[/口腔/,"b"],[/尿管|鼻胃管/,"c"],[/血糖|甘油球/,"d"],[/藥盒/,"e"]];
-            const baItems=(mt[5].match(/((?:BA|GA)\d+[a-z]?)[^×]*×(\d+)/g)||[]).map(item=>{const m2=item.match(/((?:BA|GA)\d+[a-z]?)([^×]*)×(\d+)/);if(!m2)return item;let code=m2[1],nm=m2[2]||"",qty=m2[3];if(/^BA17$/i.test(code)){for(const mp of ba17map){if(mp[0].test(nm)){code="BA17"+mp[1];break;}}}return code+"×"+qty;});
-            rows.push([year,month,day,eId,eName,seq,mt[1]+"~"+mt[2],mt[3],mt[4],baItems.join(", ")]);
-            seq++;
+            const baItems=(mt[5].match(/((?:BA|GA|SC)\d+[a-z]?)[^×]*×(\d+)/g)||[]).map(item=>{const m2=item.match(/((?:BA|GA|SC)\d+[a-z]?)([^×]*)×(\d+)/);if(!m2)return null;let code=m2[1],nm=m2[2]||"",qty=m2[3];if(/^(GA|SC)/i.test(code))return null;if(/^BA17$/i.test(code)){for(const mp of ba17map){if(mp[0].test(nm)){code="BA17"+mp[1];break;}}}return code+"×"+qty;}).filter(Boolean);
+            if(baItems.length){rows.push([year,month,day,eId,eName,seq,mt[1]+"~"+mt[2],mt[3],mt[4],baItems.join(", ")]);seq++;}
           }
         }
       }
@@ -1689,7 +1688,7 @@ function AdminMain({me, onLogout}){
       // 第一排：Logo + 標題
       e("div",{style:{display:"flex",alignItems:"center",gap:10}},
         e(YouanLogo,{size:34,color:C.bear}),
-        e("div",{style:{fontSize:22,fontWeight:700}},"佑安管理介面　A5.7")),
+        e("div",{style:{fontSize:22,fontWeight:700}},"佑安管理介面　A5.8")),
       // 維護模式狀態列（僅管理員看得到、可操作，點一下即可切換，不用改任何程式碼、不用重新部署）
       me.role==="管理員" && e("div",{
         onClick: maintBusy ? undefined : toggleMaintenance,
