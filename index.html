@@ -902,9 +902,13 @@ function App() {
       const sv=s.saved;
       setSkin(sv.skin||"ok"); setSkinNote(sv.skinNote||"");
       const init={},fl={},ext=[];
+      // ★I58：大小寫不敏感對照舊日誌內容（班表子碼小寫 BA17e、日誌可能存大寫 BA17E，避免誤判非排定/漏填）
+      const _svCI={}; Object.keys(sv.codeValues).forEach(k=>{ _svCI[String(k).toUpperCase()]=sv.codeValues[k]; });
+      const _svGet=cc=>{ return sv.codeValues[cc]!==undefined ? sv.codeValues[cc] : _svCI[String(cc).toUpperCase()]; };
       s.codes.forEach(c=>{
-        if(sv.codeValues[c.code]!==undefined&&sv.codeValues[c.code]!==""){
-          init[c.code]=sv.codeValues[c.code];
+        const _sval=_svGet(c.code);
+        if(_sval!==undefined&&_sval!==""){
+          init[c.code]=_sval;
         }else{
           // 班表新增、但當初沒填過的碼 → 才帶入上次
           const key=`${s.client}_${c.code}`;
@@ -918,7 +922,7 @@ function App() {
       });
       // 日誌有、但班表已無的碼（班表事後異動）也顯示出來，避免資料看不到
       Object.keys(sv.codeValues).forEach(code=>{
-        if(!s.codes.find(c=>c.code===code)){
+        if(!s.codes.find(c=>String(c.code).toUpperCase()===String(code).toUpperCase())){
           init[code]=sv.codeValues[code];
           ext.push({code:code,name:code,qty:1});
         }
@@ -1045,7 +1049,7 @@ function App() {
     React.createElement("div",{style:{background:C.primary,color:"white",padding:"16px 16px 14px",position:"sticky",top:0,zIndex:10}},
       React.createElement("div",{style:{display:"flex",alignItems:"center",justifyContent:"center",gap:10,marginBottom:6}},
         React.createElement(YouanLogo,{size:34,color:C.bear}),
-        React.createElement("div",{style:{fontSize:20,fontWeight:700,letterSpacing:.5,lineHeight:1.3}},"佑安服務日誌線上填寫系統 I57")),
+        React.createElement("div",{style:{fontSize:20,fontWeight:700,letterSpacing:.5,lineHeight:1.3}},"佑安服務日誌線上填寫系統 I58")),
       React.createElement("div",{style:{fontSize:21,opacity:.85,marginTop:6,textAlign:"center"}},today,"　現在 ",NOW_STR)),
     // 離線佇列提示橫幅
     (()=>{
